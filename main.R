@@ -84,8 +84,6 @@ enrich_extract(summary_table)
 calc_and_save(dir_root, tile_code)
 
 #### Durchschleifen mehrerer Kacheln:
-
-
 tile_codes |> 
   Map(f = \(tile_code){
     cat(sprintf('working on tile %s ...', tile_code))
