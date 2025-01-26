@@ -8,6 +8,25 @@ library(data.table)
 ### Arbeitsumgebung setzen
 ## Stammverzeichnis (mit `main.R` und `helpers.R`):
 dir_root <- 'Pfad/zum/Stammverzeichnis'
+
+# root
+# ├── helpers.R
+# ├── input
+# │   ├── DOM
+# │   │   ├── 26850-47525_DOM.tif
+# │   │   └── 26850-47525_DOM.tif.aux.xml
+# │   ├── GEB
+# │   │   └── DLM_8000_Bauwerk_20241118.gpkg
+# │   └── GLO
+# │       ├── 26850-47525_GLO_real_Jahressumme.tif
+# │       └── 26850-47525_GLO_real_Jahressumme.tif.aux.xml
+# ├── main.R
+# └── output
+# ├── 26850-47525.tiff
+# ├── 26850-47525.tiff.aux.xml
+# └── data_26850-47525.csv
+
+
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
