@@ -7,7 +7,7 @@ library(data.table)
 
 ### Arbeitsumgebung setzen
 ## Stammverzeichnis (mit `main.R` und `helpers.R`):
-dir_root <- '~/Dokumente/fremd/Christine Brendle/Solarpotenzial/R/'
+dir_root <- 'Pfad/zum/Stammverzeichnis'
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
