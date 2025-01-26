@@ -2,12 +2,10 @@
 ## liest Raster ein, stellt zusätzliche Raster her,
 ## dazu gehört auch das kachelweise Einlesen und Rastern der Gebäude-Polygone
 prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
-  path_dom_file <- file.path(dir_root, sprintf('input/DOM/%s_DOM.tif', tile_code))
-  print(path_dom_file)
+  path_dom_file <- file.path(dir_root, sprintf('input/DOM/%s_DOM.tif', tile_code))  
   path_glo_file <- file.path(dir_root,
                              sprintf('input/GLO/%s_GLO_real_Jahressumme.tif', tile_code)
   )
-  print(path_glo_file)
   
   ## Raster für DOM und Globalstrahlung:
   rasters <- list(dom = rast(path_dom_file) |> setNames(nm = 'elev'),
