@@ -26,6 +26,7 @@ constants <- list(
 
 Ordnerstruktur (Beispiel):
 
+```
 root
 ├── helpers.R
 ├── input
@@ -42,4 +43,7 @@ root
     ├── 26850-47525.tiff
     ├── 26850-47525.tiff.aux.xml
     └── data_26850-47525.csv
+    
+```
+    
 
