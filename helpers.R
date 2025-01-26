@@ -82,29 +82,6 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
 }
 
 
-## ergänzt die tabellierte Rasterinformation von `extract_rasters` um (auf Gebäudeebene)
-## errechnete Werte:
-enrich_extract <- \(d){ # d ist ein data.frame
-  d |> 
-    mutate(
-      suit_total = sum(c_across(starts_with('solareignung_'))) - solareignung_nicht,
-      suit_low = sum(c_across(paste0('solareignung_', c('sehr gut', 'gut')))),
-      suit_high_20 = suit_low + sum(c_across(paste0('solareignung_', c('geeignet', 'wenig (2020)')))),
-      suit_high_40 = suit_low + sum(c_across(paste0('solareignung_', c('geeignet', 'wenig (2040)')))),
-      n_possible_modules = suit_total / constants$a_usable,
-      mutate(across(starts_with('suit_'),
-                    .fns = list(
-                      e_pv = ~ prod(.x, constants$pv_e, constants$a_usable),
-                      e_st = ~ prod(.x, constants$pv_e, constants$a_usable)
-                    )
-      )
-      ),
-      .by = OBJECTID
-    )
-}
-
-
-
 extract_rasters <- \(the_rasters){
   ## extrahiert Rasterwerte und aggregiert sie pro OBJECTID zu data.frames
   ## konvertiert data.frames zu data.tables mit OBJECTID als Index
