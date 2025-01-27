@@ -1,3 +1,9 @@
+## R-Besonderheiten:
+## ` <- ` weist das Ergebnis des rechten Ausdrucks dem linken Symbol zu,
+## äquivalent dem `=` in Python
+## `|>` verwendet das Ergebnis des voranstehenden Ausdrucks als Argument
+## für den nachfolgenden Ausdruck: `f(x) |> g(x)` äquivalent `g(f(x))`
+
 
 ## liest Raster ein, stellt zusätzliche Raster her,
 ## dazu gehört auch das kachelweise Einlesen und Rastern der Gebäude-Polygone
