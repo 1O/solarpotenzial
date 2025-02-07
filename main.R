@@ -26,7 +26,7 @@ source('./helpers.R') ## Hilfsfunktionen laden
 
 ### Konstanten festlegen:
 constants <- list(
-  crs = 31287, ## Lambert Austria
+  # crs = 31287, ## Lambert Austria
   flat = 10,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
   min_cluster_size = 9, # erforderliche Mindestgröße (Pixel = m²)
   # zusammenhängender Dachfläche
