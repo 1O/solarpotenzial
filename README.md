@@ -54,7 +54,6 @@ enthält nur mehr den eigentlichen Gebäudelayer und die OBJECTID als einziges A
 ## Konstanten
 Diese Liste am Eingang des Hauptskripts `main.R`
 enthält alle user servicable parts: Neigungslimit für Flachdächer,
-Mindesgröße für zusammenhängende Dachflächenpixel (m²), Bezeichnungen für
 Nutzbarkeitsklassen etc.
 
 ```
@@ -75,8 +74,17 @@ constants <- list(
     )
 )
 
-
 ```
+## Methodik
+### Ausscheiden zu kleiner Dachflächen
+Die Ausscheidung zu kleiner Dachflächen erfolgt dzt. nicht mit einem rechteckigen
+moving window, sondern über die Größe zusammenhängender Dachpixel (m²). Damit
+werden auch unregelmäßige Formen ("Tetris-Blöcke erfasst").
+Grund ist der drastische Geschwindigkeitsunterschied (Millisekunden vs. Sekunden)
+zwischen den Berechnungsarten. Da die Dächer ohnehin häufig schräg zum Gitter
+orientiert sind, würde auch das rechteckige moving window die Wirklichkeit nicht
+unbedingt besser wiedergeben.
+
 
 ## Ergebnisse
 ### Einfluss Pufferdistanz
