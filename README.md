@@ -52,11 +52,14 @@ enthält nur mehr den eigentlichen Gebäudelayer und die OBJECTID als einziges A
 
 ```
 ## Konstanten
-für die Berechnungen:
+Diese Liste am Eingang des Hauptskripts `main.R`
+enthält alle user servicable parts: Neigungslimit für Flachdächer,
+Mindesgröße für zusammenhängende Dachflächenpixel (m²), Bezeichnungen für
+Nutzbarkeitsklassen etc.
 
 ```
 constants <- list(
-  crs = 31287, ## Lambert Austria
+  ## crs = 31287, ## Lambert Austria; nicht mehr benötigt
   flat = 10,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
   min_cluster_size = 9, # erforderliche Mindestgröße für die Dachfläche (in Pixel = m²)
   # zusammenhängender Dachfläche
