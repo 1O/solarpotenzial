@@ -18,11 +18,11 @@ setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
 
-# S4 method for class 'SQLiteDriver'
-sqlite_conn <- dbConnect(
-  drv = SQLite(),
-  dbname = './output/solarpotenzial.db'
-)
+# S4 method for class 'SQLiteDriver' (für späteres Auslesen direkt in DB)
+# sqlite_conn <- dbConnect(
+#   drv = SQLite(),
+#   dbname = './output/solarpotenzial.db'
+# )
 
 ### Konstanten festlegen:
 constants <- list(
@@ -46,8 +46,6 @@ constants <- list(
 #### mit Gesamtdatensatz der Gebäudepolygone herstellen:
 #### die Gebäudedaten sind bereits auf EPSG3035 (LAEA) wie die Rasterdaten
 filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
-
-
 v_buildings_austria = vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
 
 
@@ -83,9 +81,6 @@ calc_and_save(dir_root, tile_code)
 
 tile_codes <- c("26850-47525", "27475-45475")
 
-
-source("helpers.R")
-
 tile_codes |> 
   Map(f = \(tile_code){
     cat(sprintf('\nworking on tile %s ...', tile_code))
@@ -98,22 +93,20 @@ tile_codes |>
 
 ## Ausreißerzahl vs. verschiedene Puffergrößen als dataframe:
 tile_code <- tile_codes[2]
-res2 <- data.frame(buffer_size = 3 - .2 * 0:30) |> 
+d_outliers <- data.frame(buffer_size = 3 - .2 * 0:30) |> 
   rowwise() |>
   mutate(outlier_count = count_dom_outliers(tile_code, buffer_size = buffer_size))
 
-write.csv(res, file.path("output", sprintf("%s_outliers.csv", tile_code)))
+write.csv(d_outliers, file.path("output", sprintf("%s_outliers.csv", tile_code)))
 
 
-head(res2)
+## Ausreißer als Raster speichern (dauert mehrere Sekunden):
+tile_codes <- c("26850-47525", "27475-45475")
+tile_code <- tile_codes[2]
 
+rasters <- prepare_rasters(dir_root, tile_code)
 
-library(ggplot2)
-ggplot(res, aes(buffer_size, outlier_count)) + geom_point() + geom_line()
+show_dom_outliers(rasters$dom) |> 
+  writeRaster(sprintf('output/%s_outliers.tiff', tile_code), overwrite = TRUE)
+                                              
 
-
-last_plot() + labs(title = 'Ausreißer vs. Pufferdistanz', x = 'Pufferdistanz [m]', y = 'Anzahl Ausreißerpixel (=Fläche in m2)',
-                   caption = 'Beispielkachel 26850-47525; \npositive / negative Pufferdistanz: Gebäudeumriss wird erweitert / beschnitten')
-
-
-ggsave('./output/outliers_vs_buffer.png')
