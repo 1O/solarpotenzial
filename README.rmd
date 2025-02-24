@@ -1,8 +1,12 @@
 ---
 title: "README"
 output:
+  
+  
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex  
   html_document: default
-  pdf_document: default
 date: "2025-02-21"
 ---
 
@@ -67,8 +71,8 @@ Mit dieser Hauptmaske werden die übrigen Eingangsdaten maskiert, d. h. ausgesch
 * Neigung und Aspekt werden aus den 4 orthogonal angrenzenden Pixeln berechnet
 
 
-```{r, echo=FALSE,  fig.cap = "Workflow, Teil 1", fig.width=7.2}
-nomnoml("
+```{r, echo=FALSE,  fig.cap = "Workflow, Teil 1"}
+nomnoml(code = "
 #direction: down
   [Raster|1m x 1m]
   [<input>GLO|real]+-[Raster]
@@ -105,7 +109,9 @@ nomnoml("
   [<note>aus DOM-Ausdehnung]--[abfragen]
   [<note>nach DOM-Vorlage]--[rastern]
   [<note>image processing,\nnicht GIS:\n?imager::clean]--[slope bereinigen] 
-")
+",
+png = "./static/workflow_1.png"
+)
 ```
 
 
@@ -145,7 +151,8 @@ nomnoml("
   [<note>immer mit OBJECTID]--[auslesen]           
   [<note>Berechnungen auf Objektebene\n(Tabellenkalkulationen)]--[umformen]   
         
-")
+", png = "./static/workflow_2.png"
+)
 ```
 
 

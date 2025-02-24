@@ -62,15 +62,10 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
   rasters$buildings <- v_buildings |>
     rasterize(y = rasters$dom, field = 'OBJECTID', touches = FALSE)
   
-  ## mit Fehler abbrechen, wenn weniger als `constants$minbuildings` Gebäude
-  ## (OBJECTIDS)
-  
-  n_buildings <- rasters$buildings |> values() |> unique() |> length()
-  enough_buildings <- n_buildings >= constants$minbuildings
-  stopifnot("too few buildings in tile" = enough_buildings) |>  try()
-  
-
-  
+  ## Gemeindepolygone abfragen und rastern:
+  rasters$communities <- v_communities_austria |> 
+    query(ext = rasters$dom_full) |>
+    rasterize(y = rasters$dom, field = 'id')
   
   ## Oberflächen-Höhenmodell:
   rasters$dom <- rasters$dom_full

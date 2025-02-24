@@ -49,7 +49,10 @@ constants <- list(
 filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
 
 ## Gebäudelayer muss in EPSG 3035 (LAEA) sein:
-v_buildings_austria = vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
+v_buildings_austria <-  vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
+## dasselbe für die Gemeindepolygone:
+filepath_communities <- file.path(dir_root, './input/GEM_W23_3035.gpkg')
+v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 
 
 ## Berechnungen ----------------------------------------------------------------

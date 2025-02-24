@@ -128,7 +128,7 @@ jeweils bearbeitete Kachel abgefragt und in ein Raster mit Auflösung und
 Projektion der DOM-Kachel umgewandelt. Dieses Raster enthält OBJECTID
 und Abgrenzung der Gebäude für die nachfolgenden Berechnungen.
 
-Aus dem DOM wird die Neigung (slope) abgeleitet, aus der u. a. die
+Aus dem DOM wird die Neigung (slope) abgeleitet*, aus der u. a. die
 Hauptmaske generiert wird. Die Hauptmaske scheidet alle Rasterpixel aus,
 die bei der Auswertung vernachlässigt werden sollen. Dazu gehören:
 
@@ -152,44 +152,54 @@ ausgeschiedene Pixel werden auf rechnerisch neutral (\texttt{NA})
 gesetzt.
 
 \begin{itemize}
+\tightlist
 \item
   Neigung und Aspekt werden aus den 4 orthogonal angrenzenden Pixeln
-  berechnet (nicht wie ursprünglich aus den 8 umrandenden). Dadurch
-  reichen auch die Neigungs- und Aspektzellen bis an den Dachrand (davor
-  fiel ein Saum von 1 Pixelbreite am Dachrand als NA aus)
-\item
-  Vorschlag: Neigung zum Beschneiden der Dachfläche verwenden
+  berechnet
 \end{itemize}
 
 \begin{verbatim}
-## file:////tmp/RtmpgXEuf4/file2c0845d467e3a/widget2c0843b93ebc7.html screenshot completed
+## file:////tmp/RtmpdBFPP0/file38379287a7345/widget3837979e03079.html screenshot completed
 \end{verbatim}
 
+\begin{figure}
+\centering
 \includegraphics{README_files/figure-latex/unnamed-chunk-1-1.pdf}
+\caption{Workflow, Teil 1}
+\end{figure}
 
-\subsubsection{Ausscheiden zu kleiner
-Dachflächen}\label{ausscheiden-zu-kleiner-dachfluxe4chen}
+\paragraph{Teil 2: Von den maskierten Eingangsrastern bis zu den
+Ergebnissen}\label{teil-2-von-den-maskierten-eingangsrastern-bis-zu-den-ergebnissen}
 
-Die Ausscheidung zu kleiner Dachflächen erfolgt dzt. nicht mit einem
-rechteckigen moving window, sondern über die Größe zusammenhängender
-Dachpixel (m²). Damit werden auch unregelmäßige Formen (``Tetris-Blöcke
-erfasst''). Grund ist der drastische Geschwindigkeitsunterschied
-(Millisekunden vs.~Sekunden) zwischen den Berechnungsarten. Da die
-Dächer ohnehin häufig schräg zum Gitter orientiert sind, würde auch das
-rechteckige moving window die Wirklichkeit nicht unbedingt besser
-wiedergeben.
-
-\subsection{Ergebnisse}\label{ergebnisse}
+Mit der oben erstellten Hauptmaske werden die übrigen benötigten
+Eingangsraster (Globalstrahlung) und das aus dem DOM abgeleitete Raster
+``Aspekt'' beschnitten. Die weiteren abgeleiteten Raster (wahre
+Dachfläche, Eignungsklassen, Dachtyp {[} flach/geneigt{]}) werden
+überhaupt aus den bereits maskierten Rastern berechnet, weil dafür keine
+Saumpixel mehr benötigt werden (anders als beim Aspekt). Aus den
+maskierten Rastern werden die Werte auf Gebäudeebene aggregiert in
+Tabellenform (\texttt{data.frames}) ausgelesen. Die tabellierten Daten
+werden samt Gemeindezugehörigkeit kachelweise als CSV und/oder
+Excel-Dateien gespeichert und kachelübergreifend in eine Datenbankdatei
+(dzt. SQLite) gespeichert. Letzteres ermöglicht die gemeindeweise
+Auswertung des Kachelschnitts.
 
 \begin{verbatim}
-## file:////tmp/RtmpgXEuf4/file2c0844f824fac/widget2c08449565f23.html screenshot completed
+## file:////tmp/RtmpdBFPP0/file383791cea5c97/widget3837939d519f0.html screenshot completed
 \end{verbatim}
 
+\begin{figure}
+\centering
 \includegraphics{README_files/figure-latex/unnamed-chunk-2-1.pdf}
+\caption{Workflow, Teil 2}
+\end{figure}
+
+\subsection{Anmerkungen}\label{anmerkungen}
 
 \subsubsection{Einfluss Pufferdistanz}\label{einfluss-pufferdistanz}
 
-Bei ca. 1,5 m Puffer (Erweiterung des Gebäudeumrissen treten die meisten
+\emph{obsolet, da Kantenbereinigung jetzt über die Neigung erfolgt} Bei
+ca. 1,5 m Puffer (Erweiterung des Gebäudeumrissen treten die meisten
 Höhen-Ausreißer auf, von da weg nehmen sie rel. linear in beide
 Richtungen ab. Eine markante Änderung der Ausreißerzahl bei einer
 bestimmten Pufferdistanz zur Optimierung der Distanz ist leider nicht
@@ -197,12 +207,7 @@ erkennbar.)
 
 \subsubsection{Höhenausreißer}\label{huxf6henausreiuxdfer}
 
-Die jetzige Ausreißerdefinition würde Flachdächer desselben Gebäudes bei
-größeren Niveauunterschieden ausscheiden:
-
-\subsubsection{Kontrolle Aspekt}\label{kontrolle-aspekt}
-
-Unterscheidung nach acht Himmelsrichtungen am Beispiel der Domkuppel
-(Salzburg, Kachel 27475-45475)
+\emph{obsolet (s. o.)} Die jetzige Ausreißerdefinition würde Flachdächer
+desselben Gebäudes bei größeren Niveauunterschieden ausscheiden.
 
 \end{document}
