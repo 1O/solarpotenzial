@@ -67,7 +67,7 @@ Mit dieser Hauptmaske werden die übrigen Eingangsdaten maskiert, d. h. ausgesch
 * Neigung und Aspekt werden aus den 4 orthogonal angrenzenden Pixeln berechnet
 
 
-```{r, echo=FALSE,  fig.cap = "Workflow, Teil 1"}
+```{r, echo=FALSE,  fig.cap = "Workflow, Teil 1", fig.width=7.2}
 nomnoml("
 #direction: down
   [Raster|1m x 1m]

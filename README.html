@@ -9004,8 +9004,8 @@ d. h. ausgeschiedene Pixel werden auf rechnerisch neutral
 berechnet</li>
 </ul>
 <div class="figure">
-<div class="nomnoml html-widget html-fill-item" id="htmlwidget-2153f81e9c28d2c1afc3" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-2153f81e9c28d2c1afc3">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [Raster|1m x 1m]\n  [<input>GLO|real]+-[Raster]\n  [<input>DOM]+-[Raster]\n  [<input>aspect]+-[Raster]\n  [<input>slope]+-[Raster]\n  [DOM]-->[aspect]\n  [DOM]-->[slope]\n  [DOM]--[abfragen]\n  [<input>slope]\n  [<input>aspect]\n  [<database>Gebäude-DB] ->\n    [<state>abfragen]->\n      [<choice>Gebäude?]\n  [<choice>Gebäude?] -> [<state>rastern]\n  [Gebäude?] nein ->[<end>Ende]\n  [rastern] -> [<input>GEB]\n  [<input>GLO]\n  [GEB] -> [<state>slope beschneiden|auf Gebäude]\n  [slope]-[slope beschneiden]\n  [slope beschneiden] ->\n    [<state>slope bereinigen|Grate (0-10°), Steilfl.\n       (> 70°), Inseln (0-10°)\n    ] ->\n      [<input>Generalmaske]\n  [Raster]-> [<state>maskieren]->[<input>Raster maskiert]\n  [Generalmaske]--[maskieren]\n  [Raster maskiert]->\n    [<state>ableiten|pixelweise: effektive Fläche,\n Eignungsklassen ...\n    ] ->\n      [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]\n  [auslesen] -> [<input>Tabelle|(ein Datensatz / Gebäude)]  \n// notes:\n  [<note>aus DOM-Ausdehnung]--[abfragen]\n  [<note>nach DOM-Vorlage]--[rastern]\n  [<note>image processing,\nnicht GIS:\n?imager::clean]--[slope bereinigen] \n","svg":false,"png":null},"evals":[],"jsHooks":[]}</script>
+<div class="nomnoml html-widget html-fill-item" id="htmlwidget-a876578a8a0bb4020179" style="width:691.2px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-a876578a8a0bb4020179">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [Raster|1m x 1m]\n  [<input>GLO|real]+-[Raster]\n  [<input>DOM]+-[Raster]\n  [<input>aspect]+-[Raster]\n  [<input>slope]+-[Raster]\n  [DOM]-->[aspect]\n  [DOM]-->[slope]\n  [DOM]--[abfragen]\n  [<input>slope]\n  [<input>aspect]\n  [<database>Gebäude-DB] ->\n    [<state>abfragen]->\n      [<choice>Gebäude?]\n  [<choice>Gebäude?] -> [<state>rastern]\n  [Gebäude?] nein ->[<end>Ende]\n  [rastern] -> [<input>GEB]\n  [<input>GLO]\n  [GEB] -> [<state>slope beschneiden|auf Gebäude]\n  [slope]-[slope beschneiden]\n  [slope beschneiden] ->\n    [<state>slope bereinigen|Grate (0-10°), Steilfl.\n       (> 70°), Inseln (0-10°)\n    ] ->\n      [<input>Generalmaske]\n  [Raster]-> [<state>maskieren]->[<input>Raster maskiert]\n  [Generalmaske]--[maskieren]\n  [Raster maskiert]->\n    [<state>ableiten|pixelweise: effektive Fläche,\n Eignungsklassen ...\n    ] ->\n      [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]\n  [auslesen] -> [<input>Tabelle|(ein Datensatz / Gebäude)]  \n// notes:\n  [<note>aus DOM-Ausdehnung]--[abfragen]\n  [<note>nach DOM-Vorlage]--[rastern]\n  [<note>image processing,\nnicht GIS:\n?imager::clean]--[slope bereinigen] \n","svg":false,"png":null},"evals":[],"jsHooks":[]}</script>
 <p class="caption">
 Workflow, Teil 1
 </p>
@@ -9027,8 +9027,8 @@ gespeichert und kachelübergreifend in eine Datenbankdatei (dzt. SQLite)
 gespeichert. Letzteres ermöglicht die gemeindeweise Auswertung des
 Kachelschnitts.</p>
 <div class="figure">
-<div class="nomnoml html-widget html-fill-item" id="htmlwidget-6b4975f73f4539a30b11" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-6b4975f73f4539a30b11">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [<database>Objekt-DB]\n  [<input>Raster maskiert]->\n        [<state>ableiten|pixelweise: effektive Fläche,\n\n          Eignungsklassen ...\n        ] ->\n          [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]->\n            [<state>umformen] ->\n              [<state>joinen|mit Gemeinde-ID]->\n                [<state>speichern]\n  [Objekt-DB]--[joinen]\n  [speichern]->[<database>Ergebnis-DB|(gesamt)]\n  [speichern]->[Tabellendatei|(pro Kachel)]\n  [speichern]->[GeoTIFFs|(pro Kachel)]\n  [Raster maskiert]->[speichern]\n  // notes:\n  [<note>OBJECTIDs pro Gemeinde \naus Verschneidung\nGebäude-DB und\n  Gemeinde-Shapefile]--[Objekt-DB]           \n  [<note>immer mit OBJECTID]--[auslesen]           \n  [<note>Berechnungen auf Objektebene\n(Tabellenkalkulationen)]--[umformen]   \n        \n","svg":false,"png":null},"evals":[],"jsHooks":[]}</script>
+<div class="nomnoml html-widget html-fill-item" id="htmlwidget-a66197cf99a65195d80c" style="width:672px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-a66197cf99a65195d80c">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [<database>Objekt-DB]\n  [<input>Raster maskiert]->\n        [<state>ableiten|pixelweise: effektive Fläche,\n\n          Eignungsklassen ...\n        ] ->\n          [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]->\n            [<state>umformen] ->\n              [<state>joinen|mit Gemeinde-ID]->\n                [<state>speichern]\n  [Objekt-DB]--[joinen]\n  [speichern]->[<database>Ergebnis-DB|(gesamt)]\n  [speichern]->[Tabellendatei|(pro Kachel)]\n  [speichern]->[GeoTIFFs|(pro Kachel)]\n  [Raster maskiert]->[speichern]\n  // notes:\n  [<note>OBJECTIDs pro Gemeinde \naus Verschneidung\nGebäude-DB und\n  Gemeinde-Shapefile]--[Objekt-DB]           \n  [<note>immer mit OBJECTID]--[auslesen]           \n  [<note>Berechnungen auf Objektebene\n(Tabellenkalkulationen)]--[umformen]   \n        \n","svg":false,"png":null},"evals":[],"jsHooks":[]}</script>
 <p class="caption">
 Workflow, Teil 2
 </p>
@@ -9045,8 +9045,8 @@ Bei ca. 1,5 m Puffer (Erweiterung des Gebäudeumrissen treten die meisten
 Höhen-Ausreißer auf, von da weg nehmen sie rel. linear in beide
 Richtungen ab. Eine markante Änderung der Ausreißerzahl bei einer
 bestimmten Pufferdistanz zur Optimierung der Distanz ist leider nicht
-erkennbar.)</p>
-<!-- <img src="output/outliers_vs_buffer.png" height=500/> -->
+erkennbar.)
+<!-- <img src="output/outliers_vs_buffer.png" height=500/> --></p>
 </div>
 <div id="höhenausreißer" class="section level3">
 <h3>Höhenausreißer</h3>
