@@ -1,0 +1,208 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={README},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{README}
+\author{}
+\date{\vspace{-2.5em}2025-02-21}
+
+\begin{document}
+\maketitle
+
+\section{Doku}\label{doku}
+
+\subsection{Vorbereitungen}\label{vorbereitungen}
+
+\begin{itemize}
+\item
+  Das Geopackage mit Gebäuden (``Gebäude-DB'') wurde von LAEA Europe
+  (EPSG 3035) auf Lambert Austria (EPSG 31287) umprojiziert, um der
+  Projektion der Eingangsraster (DOM, Globalstrahlung) zu entsprechen.
+\item
+  Durch Verschneidung der Gebäude-DB mit Gemeindepolygonen wurden eine
+  Nachschlagetabelle für die spätere Zuordnung von Gebäuden und
+  Gemeinden (und die Aggregierung auf Gemeindeebene) erstellt.
+\end{itemize}
+
+\subsection{Konstanten}\label{konstanten}
+
+Die Liste am Eingang des Hauptskripts \texttt{main.R} enthält alle user
+servicable parts: Neigungslimit für Flachdächer, Nutzbarkeitsklassen
+etc. Die Einstellung der Parameter wird (nur) hier vorgenommen:
+
+\begin{verbatim}
+constants <- list(
+  flat = 10,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
+  steep = 70, # Schwellenwert (°), oberhalb dessen eine Dachfläche als Kante
+  ## bzw. nicht montagetauglich betrachtet wird.
+  minsize = 3, # erforderliche Mindestausdehnung zusammenhängender Flächen (Pixel = m²)
+  # zusammenhängender Dachfläche
+  minbuildings = 3, ## Mindestanzahl an Gebäuden, ab der die Kachel berechnet wird
+  a_usable = .7,  # Anteil der für PV nutzbaren Dachfläche (0-1)
+  modul_m2 = 2.1,  # Fläche pro Modul [m2]
+  pv_e = .18,  # PV efficiency (0-1)
+  pv_e_f = \(irr_global) .1898 * irr_global - 3.9931, ## Regression statt Konstante
+  st_e = .4,  # ST efficiency (0-1)
+  buffer = 0,  # Puffer um Gebäudepolygone [m]; nicht puffern, die Berechnung von Neigung/Aspekt 
+  ## entfernt sowieso schon den Zellsaum;
+  intervals_solar = c(0, 550, 700, 850, 1000, 1150, Inf), ## Klassen solar
+  labels = list(
+    aspect = c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'),
+    eignung_solar = c('nicht', 'wenig_2040', 'wenig_2020', 'geeignet', 'gut', 'sehr_gut')
+    )
+)
+\end{verbatim}
+
+\subsection{Methodik}\label{methodik}
+
+\subsubsection{Workflow}\label{workflow}
+
+\paragraph{Teil 1: von den Eingangsdateien bis zur
+Hauptmaske}\label{teil-1-von-den-eingangsdateien-bis-zur-hauptmaske}
+
+Die in der Gebäude-DB enthaltenen Gebäudegeometrien werden nur für die
+jeweils bearbeitete Kachel abgefragt und in ein Raster mit Auflösung und
+Projektion der DOM-Kachel umgewandelt. Dieses Raster enthält OBJECTID
+und Abgrenzung der Gebäude für die nachfolgenden Berechnungen.
+
+Aus dem DOM wird die Neigung (slope) abgeleitet, aus der u. a. die
+Hauptmaske generiert wird. Die Hauptmaske scheidet alle Rasterpixel aus,
+die bei der Auswertung vernachlässigt werden sollen. Dazu gehören:
+
+\begin{itemize}
+\tightlist
+\item
+  Pixel außerhalb von Gebäuden (Objekten) lt. Gebäude-DB
+\item
+  Grate: langgezogene, dünne (≤ \texttt{minsize} Pixelreihen) mit max.
+  10° Neigung, wie sie im DOM z. B. durch Dachfirste erzeugt werden
+\item
+  Inseln: kleine Pixelhaufen, etwa durch Dachaufbauten, mit den
+  Ausscheidungskriterien für Grate
+\item
+  Kanten oder steile Flächen \textgreater{} \texttt{steep}
+  Neigungswinkel
+\end{itemize}
+
+Mit dieser Hauptmaske werden die übrigen Eingangsdaten maskiert, d.~h.
+ausgeschiedene Pixel werden auf rechnerisch neutral (\texttt{NA})
+gesetzt.
+
+\begin{itemize}
+\item
+  Neigung und Aspekt werden aus den 4 orthogonal angrenzenden Pixeln
+  berechnet (nicht wie ursprünglich aus den 8 umrandenden). Dadurch
+  reichen auch die Neigungs- und Aspektzellen bis an den Dachrand (davor
+  fiel ein Saum von 1 Pixelbreite am Dachrand als NA aus)
+\item
+  Vorschlag: Neigung zum Beschneiden der Dachfläche verwenden
+\end{itemize}
+
+\begin{verbatim}
+## file:////tmp/RtmpgXEuf4/file2c0845d467e3a/widget2c0843b93ebc7.html screenshot completed
+\end{verbatim}
+
+\includegraphics{README_files/figure-latex/unnamed-chunk-1-1.pdf}
+
+\subsubsection{Ausscheiden zu kleiner
+Dachflächen}\label{ausscheiden-zu-kleiner-dachfluxe4chen}
+
+Die Ausscheidung zu kleiner Dachflächen erfolgt dzt. nicht mit einem
+rechteckigen moving window, sondern über die Größe zusammenhängender
+Dachpixel (m²). Damit werden auch unregelmäßige Formen (``Tetris-Blöcke
+erfasst''). Grund ist der drastische Geschwindigkeitsunterschied
+(Millisekunden vs.~Sekunden) zwischen den Berechnungsarten. Da die
+Dächer ohnehin häufig schräg zum Gitter orientiert sind, würde auch das
+rechteckige moving window die Wirklichkeit nicht unbedingt besser
+wiedergeben.
+
+\subsection{Ergebnisse}\label{ergebnisse}
+
+\begin{verbatim}
+## file:////tmp/RtmpgXEuf4/file2c0844f824fac/widget2c08449565f23.html screenshot completed
+\end{verbatim}
+
+\includegraphics{README_files/figure-latex/unnamed-chunk-2-1.pdf}
+
+\subsubsection{Einfluss Pufferdistanz}\label{einfluss-pufferdistanz}
+
+Bei ca. 1,5 m Puffer (Erweiterung des Gebäudeumrissen treten die meisten
+Höhen-Ausreißer auf, von da weg nehmen sie rel. linear in beide
+Richtungen ab. Eine markante Änderung der Ausreißerzahl bei einer
+bestimmten Pufferdistanz zur Optimierung der Distanz ist leider nicht
+erkennbar.)
+
+\subsubsection{Höhenausreißer}\label{huxf6henausreiuxdfer}
+
+Die jetzige Ausreißerdefinition würde Flachdächer desselben Gebäudes bei
+größeren Niveauunterschieden ausscheiden:
+
+\subsubsection{Kontrolle Aspekt}\label{kontrolle-aspekt}
+
+Unterscheidung nach acht Himmelsrichtungen am Beispiel der Domkuppel
+(Salzburg, Kachel 27475-45475)
+
+\end{document}

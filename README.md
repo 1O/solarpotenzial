@@ -76,6 +76,21 @@ constants <- list(
 
 ```
 ## Methodik
+
+### Workflow
+- Der Gebäudelayer wird für alle weiteren Berechnungen mit Auflösung und Ausdehnung
+der jeweiligen Kachel gerastert. Dabei wird alles außerhalb Gebäuden als NA (Null)
+gerastert. Damit werden sämtliche anderen Raster maskiert.
+
+- Neigung und Aspekt werden aus den 4 orthogonal angrenzenden Pixeln berechnet
+(nicht wie ursprünglich aus den 8 umrandenden). Dadurch reichen auch die Neigungs-
+und Aspektzellen bis an den Dachrand (davor fiel ein Saum von 1 Pixelbreite am
+Dachrand als NA aus)
+
+- Vorschlag: Neigung zum Beschneiden der Dachfläche verwenden
+
+
+
 ### Ausscheiden zu kleiner Dachflächen
 Die Ausscheidung zu kleiner Dachflächen erfolgt dzt. nicht mit einem rechteckigen
 moving window, sondern über die Größe zusammenhängender Dachpixel (m²). Damit
