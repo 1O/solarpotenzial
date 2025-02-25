@@ -46,9 +46,8 @@ constants <- list(
 #### DB-Verbindung zu Geopackage
 #### mit Gesamtdatensatz der Gebäudepolygone herstellen:
 #### die Gebäudedaten sind bereits auf EPSG3035 (LAEA) wie die Rasterdaten
-filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
-
 ## Gebäudelayer muss in EPSG 3035 (LAEA) sein:
+filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
 v_buildings_austria <-  vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
 ## dasselbe für die Gemeindepolygone:
 filepath_communities <- file.path(dir_root, './input/GEM_W23_3035.gpkg')
@@ -58,7 +57,7 @@ v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
 
-tile_codes <- c("26850-47525", "27475-45475")
+tile_codes <- c("26850-47525", "99999-99999", "27475-45475")
 
 
 #### Raster aus GeoTIFFs einlesen und abgeleitete Raster berechnen:
@@ -68,19 +67,41 @@ tile_codes <- c("26850-47525", "27475-45475")
 
 rasters <- prepare_rasters(dir_root, tile_codes[1])
 
+prepare_rasters(dir_root, tile_codes[1]) |> microbenchmark::microbenchmark(times = 5)
+
+
 #### Rasterinformationen in Tabelle (data.table) zusammenführen:
 ## Dauer: 1.69 s pro Kachel
-summary_table <- extract_rasters(rasters)
+summary_table <- extract_rasters(rasters) |> enrich_extract()
+
 
 
 #### Durchschleifen mehrerer Kacheln:
-tile_codes |> 
-  Map(f = \(tile_code){
-    cat(sprintf('\nworking on tile %s ...', tile_code))
-    calc_and_save(dir_root, tile_code)
-  })
+
+### Datenbankverbindung öffnen; falls nicht vorhanden, wird Datenbank
+### dieses Namens angelegt:
+sqlite_conn <- dbConnect(
+  drv = SQLite(),
+  dbname = './output/solarpotenzial.db'
+)
+
+#### tile codes durchschleifen:
+seq_along(tile_codes) |> 
+  Map(f = \(i){
+    calc_and_save(dir_root, tile_code = tile_codes[i], conn = sqlite_conn, i = i)
+  }) |> microbenchmark::microbenchmark(times = 1)
+
+
+### Datenbankverbindung schließen:
+dbDisconnect(sqlite_conn)
 
 ## Sandbox ---------------------------------------------------------------------
+
+source('./helpers.R')
+
+
+
+
 
 #   ## Ausreißerzahl vs. verschiedene Puffergrößen als dataframe:
 # tile_code <- tile_codes[1]

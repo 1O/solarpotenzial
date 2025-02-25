@@ -1,6 +1,9 @@
 
 ## behält nur Pixelsammlungen über `minsize` Mindestausdehnung:
 clean_raster <- \(r){
+  ## raster auf Neigungen unter 70° beschränken:
+  r <- clamp(r, 0, 70)
+  ## Inseln < minsize entfernen:
   im <- matrix(r, dim(r)) |> as.cimg() 
   values(r) <- as.pixset(!is.na(im)) |> clean(constants$minsize) |> as.matrix() |> t()
   r <- subst(r, FALSE, NA)
@@ -20,25 +23,6 @@ keep_large_blocks <- \(r){
 }
 
 
-## prüft ob mindestens ein Gebäude (OBJECTID) in der Kachel zu liegen kommt.
-## Falls ja, wird der gesamte Gebäudelayer als Raster zurückgegeben, 
-## andernfalls FALSE zum Abbruch weiterer Berechnungen für diese Kachel
-get_building_raster_or_skip <- \(r){
-  v_buildings <- 
-    ## Gebäudepolygone innerhalb des DOM-Rasters:
-    query(v_buildings_austria, extent = r) 
-  ifelse(length(v_buildings),
-         return(v_buildings |>
-                  buffer(constants$buffer) |> 
-                  rasterize(y = r, field = 'OBJECTID', touches = FALSE)
-         )
-         ,
-         FALSE
-  )
-}
-
-
-
 ## liest Raster ein, stellt zusätzliche Raster her,
 ## dazu gehört auch das kachelweise Einlesen und Rastern der Gebäude-Polygone
 prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
@@ -51,19 +35,16 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
   )
   
   
-  ## mit gepuffertem, rasterisierten Gebäudevektor starten, alle weiteren
-  ## Raster werden gleich damit maskiert:
-  v_buildings <- 
-    ## Gebäudepolygone innerhalb des DOM-Rasters:
-    query(v_buildings_austria, extent = rasters$dom_full) |> 
-    buffer(constants$buffer)
+  v_buildings <- query(v_buildings_austria, extent = rasters$dom_full)
+  ## mit NULL abbrechen, falls keine Gebäude in Kachel:
+  if(all(is.na(values(v_buildings)))) return(NULL)
   
-  ## Gebäudepolygone als Raster "buildings", Auflösung und Extent vom DOM:
   rasters$buildings <- v_buildings |>
-    rasterize(y = rasters$dom, field = 'OBJECTID', touches = FALSE)
-  
+    buffer(constants$buffer) |> 
+    rasterize(y = rasters$dom_full, field = 'OBJECTID', touches = FALSE)
+
   ## Gemeindepolygone abfragen und rastern:
-  rasters$communities <- v_communities_austria |> 
+  rasters$communities <- v_communities_austria |>
     query(ext = rasters$dom_full) |>
     rasterize(y = rasters$dom, field = 'id')
   
@@ -123,8 +104,8 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
   
   set.names(rasters$suit, 'suit')
   
-  speckle_mask <- clean_raster(rasters$buildings)
-  rasters <- Map(rasters, f = \(r) mask(r, speckle_mask))
+  general_mask <- clean_raster(rasters$buildings)
+  rasters <- Map(rasters, f = \(r) mask(r, general_mask))
   rasters
 }
 
@@ -169,6 +150,12 @@ extract_rasters <- \(rasters, iqr_mult = 2){
                     }
   ) |> setNames(c('OBJECTID', 'n_outliers'))
   
+  ## Gemeinde-IDs der Gebäude:
+  community_ids <- zonal(rasters$communities, rasters$buildings, mean) |>
+    mutate(id = (cats(rasters$communities)[[1]])$id[id + 1]) |>
+    rename(GEMEINDE_ID = id)
+  
+  
   ## Statistiken für DOM:
   dom_stats <- zonal(rasters$dom, rasters$buildings,
                      fun = \(xs){sapply(c(min = min, mean = mean, sd = sd, max = max),
@@ -185,16 +172,27 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   suitabilities <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit)
   names(suitabilities)[1] <- 'OBJECTID'
   
+  ## Jahreseinstrahlung pro Eignungsklasse:
+  glo_per_suit <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$suit) |> 
+    rename_with(.fn = ~ gsub('^', 'glo_', .x)) |>
+    rename(OBJECTID = glo_suit_OBJECTID)
+  
+  
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings)
   ## Ertrag Solarthermie
   harvest_st <- zonal(rasters$harvest_st, rasters$buildings)
   
   ## alle zu data.frame joinen:
-    Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
-         list(dom_stats, outliers, aspects, rooftypes,
-              suitabilities, harvest_pv, harvest_st)
-         )
+  Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
+         list(community_ids,
+              dom_stats, outliers,
+              aspects, rooftypes,
+              suitabilities, 
+              glo_per_suit,
+              harvest_pv, harvest_st
+              )
+  )
 }
 
 
@@ -204,71 +202,84 @@ enrich_extract <- \(d){ # d ist ein data.table
   tmp <- as.data.table(d)
   setnames(tmp, paste0('aspect_', 0:7), paste0('aspect.', constants$labels$aspect))
   setnames(tmp, paste0('suit_', 0:5), paste0('eign.', constants$labels$eignung_solar))
+  setnames(tmp, paste0('glo_suit_', 0:5), paste0('glo_eign.', constants$labels$eignung_solar))
   setnames(tmp, names(tmp), gsub('NaN', 'unb', names(tmp)))
   
-  # # ## possible module count
-  # tmp[, `:=` (n_poss_modules = rowSums(.SD) * constants$a_usable / constants$modul_m2),
-  #     #### diese Spalten für Berechnung:
-  #     .SDcols = paste0('eign.', c('wenig_2020', 'geeignet', 'gut', 'sehr_gut'))
-  # ]
-  # ## high scenario 2020
-  # tmp[, `:=` (e_pv_2020_high = rowSums(.SD) * constants$a_usable * constants$pv_e,
-  #             e_st_2020_high = rowSums(.SD) * constants$a_usable * constants$st_e
-  # ),
-  # .SDcols = paste0('eign.', c('wenig_2020', 'geeignet', 'gut', 'sehr_gut'))
-  # ]
-  # 
-  # ## high scenario 2040
-  # tmp[, `:=` (e_pv_2040_high = rowSums(.SD) * constants$a_usable * constants$pv_e,
-  #             e_st_2040_high = rowSums(.SD) * constants$a_usable * constants$st_e
-  # ),
-  # .SDcols = paste0('eign.', c('wenig_2020', 'wenig_2040', 'geeignet', 'gut', 'sehr_gut'))
-  # ]
-  # 
-  # ## low scenarios 2020 & 2040 (identisch)
-  # tmp[, `:=` (e_pv_2020_low = rowSums(.SD) * constants$a_usable * constants$pv_e,
-  #             e_st_2020_low = rowSums(.SD) * constants$a_usable * constants$st_e,
-  #             e_pv_2040_low = rowSums(.SD) * constants$a_usable * constants$pv_e,
-  #             e_st_2040_low = rowSums(.SD) * constants$a_usable * constants$st_e
-  # ),
-  # .SDcols = paste0('eign.', c('gut', 'sehr_gut'))
-  # ]
-  
-  tmp[, OBJECTID:=NULL]
   tmp |> as.data.frame()
 }
 
 
+prepare_db_output_table <- \(conn, table_name = 'raw'){
+  field_types <- c(rep('integer', 2), rep('double', 4),
+                   'integer', rep('double', 24)) |> 
+    setNames(nm = c('OBJECTID', 'GEMEINDE_ID', paste0('dom.', c('min', 'mean', 'sd', 'max')),
+                    'n_outliers', paste0('aspect.', c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW')),
+                    'flat', 'inclined', 'eign.nicht', 'eign.wenig_2040', 'eign.wenig_2020', 'eign.geeignet',
+                    'eign.gut', 'eign.sehr_gut',
+                    'glo_eign.nicht', 'glo_eign.wenig_2040', 'glo_eign.wenig_2020',
+                    'glo_eign.geeignet', 'glo_eign.gut', 'glo_eign.sehr_gut',
+                    'ertrag_PV', 'ertrag_ST'
+    ))
+  
+  if(dbExistsTable(conn, table_name)) dbRemoveTable(conn, table_name)
+  dbCreateTable(conn, name = table_name, fields = field_types)
+}
+
+## schreibt data.frame in SQLite-DB
+write_to_db <- \(d, table_name = 'raw', conn){ ## data.frame
+  dbWriteTable(conn = conn, name = table_name, value = d, append = TRUE)
+}
+
+
+
+
+
 ### Berechnung und Speicherung pro Kachel:
-calc_and_save <- \(dir_root = '.', tile_code){
+calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, conn, i){
+  cat(paste('\n', i, Sys.time(), ': '))
+  cat(sprintf('working on tile %s ...', tile_code))
   cat('preparing rasters...')
   rasters <- prepare_rasters(dir_root, tile_code) ## Arbeitsraster anlegen
-
+  
   tryCatch(
     d <- rasters |> 
-      extract_rasters() ##|> ## Rasterwerte als data.frame extrahieren
-    ## enrich_extract() ## zusätzliche Tabellenkalkulationen
+      extract_rasters() |> ## Rasterwerte als data.frame extrahieren
+      enrich_extract() ## zusätzliche Tabellenkalkulationen
     , error = \(e) cat('...can\'t extract data')
   )
   
+  
+  cat("...trying to write to database ...")
+  tryCatch({
+    prepare_db_output_table(conn)
+    write_to_db(d, table_name = 'raw', conn)},
+           error = \(e) cat(paste('can\'t write to database:', e))
+  )
+  
+
   cat("...trying to write CSV...")
   ## Ergebnistabelle als CSV speichern:
   tryCatch( d |> write.csv2(file.path(dir_root, sprintf('output/data_%s.csv', tile_code))),
             error = \(e) cat('...writing failed')
   )
-  cat("...trying to save tiffs...")
-  ## Raster als Tiffs speichern:
-  tryCatch({
-    Map(names(rasters),
-        f = \(n) writeRaster(rasters[[n]], 
-                             sprintf('./output/%s_%s_%s.tiff', tile_code, n,
-                                     as.character(constants$minsize)
-                                     ),
-                             overwrite = TRUE))
-  },
-  error = \(e) cat('...saving tiff failed')
-  )
+  
+  if(export_images){
+    ## falls export_images == TRUE, Raster als GeoTIFFs speichern:
+    cat("...trying to save tiffs...")
+    tryCatch({
+      Map(names(rasters),
+          f = \(n) writeRaster(rasters[[n]], 
+                               sprintf('./output/%s_%s_%s.tiff', tile_code, n,
+                                       as.character(constants$minsize)
+                               ),
+                               overwrite = TRUE))
+    },
+    error = \(e) cat('...saving tiff failed')
+    )
+  }
 }
+
+
 
 
 count_dom_outliers <- \(tile_code, buffer_size = -1, iqr_mult = 2){
