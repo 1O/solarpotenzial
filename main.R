@@ -16,7 +16,7 @@ dir_root <- '~/Dokumente/fremd/Christine Brendle/Solarpotenzial/R/'
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
-
+data_root <- "/media/ivo/LaCie/Solarpotenzial/data/Kacheln/"
 
 ### Konstanten festlegen:
 constants <- list(
@@ -45,6 +45,8 @@ constants <- list(
 ## Gebäudelayer muss in EPSG 3035 (LAEA) sein:
 filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
 v_buildings_austria <-  vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
+
+
 ## dasselbe für die Gemeindepolygone:
 filepath_communities <- file.path(dir_root, './input/GEM_W23_3035.gpkg')
 v_communities_austria <- vect(filepath_communities, proxy = TRUE)
@@ -52,8 +54,15 @@ v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
-tile_codes <- c("26850-47525", "99999-99999", "27475-45475")
+tile_codes <- list.files(file.path(data_root, 'DSM'),
+                         pattern = '\\.tif[f]?$'
+) |> 
+  gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
+  sort()
 
+
+
+length(tile_codes) ## 14008
 
 #### Raster aus GeoTIFFs einlesen und abgeleitete Raster berechnen:
 ## Dauer: 1.8 s / Kachel
@@ -61,13 +70,12 @@ tile_codes <- c("26850-47525", "99999-99999", "27475-45475")
 ## Gebäudevektors außerhalb von R
 
 source('./helpers.R')
-rasters <- prepare_rasters(dir_root, tile_codes[1])
+rasters <- prepare_rasters(data_root, tile_codes[1000])
 
-rasters$slope
+extract_rasters(rasters) |> enrich_extract()
 
 
-prepare_rasters(dir_root, tile_codes[1]) |> microbenchmark::microbenchmark(times = 5)
-
+plot(rasters$buildings)
 
 #### Rasterinformationen in Tabelle (data.table) zusammenführen:
 ## Dauer: 1.69 s pro Kachel
@@ -84,12 +92,24 @@ conn <- dbConnect(
   dbname = './output/solarpotenzial.db'
 )
 
+
+source('./helpers.R')
+prepare_db_output_table(conn, 'raw')
+
+
+
 #### tile codes durchschleifen:
-seq_along(tile_codes) |> 
+# seq_along(10:11) |> 
+  1:1000 |> 
   Map(f = \(i){
     calc_and_save(dir_root, tile_code = tile_codes[i],
-                  conn = conn, i = i, export_images = TRUE)
+                  conn = conn, i = i,
+                  save_excels = FALSE,
+                  export_images = FALSE
+                  )
   }) ##|> microbenchmark::microbenchmark(times = 1)
+
+
 
 
 ### Datenbankverbindung schließen:
@@ -108,6 +128,31 @@ summary(d)
 ## Sandbox ---------------------------------------------------------------------
 
 source('./helpers.R')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

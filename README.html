@@ -8978,11 +8978,13 @@ vorgenommen:</p>
 <h3>Workflow</h3>
 <div id="teil-1-von-den-eingangsdateien-bis-zur-hauptmaske" class="section level4">
 <h4>Teil 1: von den Eingangsdateien bis zur Hauptmaske</h4>
-<p>Die in der Gebäude-DB enthaltenen Gebäudegeometrien werden nur für
-die jeweils bearbeitete Kachel abgefragt und in ein Raster mit Auflösung
-und Projektion der DOM-Kachel umgewandelt. Dieses Raster enthält
-OBJECTID und Abgrenzung der Gebäude für die nachfolgenden
+<p>Die in der Gebäude-DB enthaltenen <strong>Gebäudegeometrien</strong>
+werden nur für die jeweils bearbeitete Kachel abgefragt und in ein
+Raster mit Auflösung und Projektion der DOM-Kachel umgewandelt. Dieses
+Raster enthält OBJECTID und Abgrenzung der Gebäude für die nachfolgenden
 Berechnungen.</p>
+<p>Analog werden die <strong>Gemeindepolygone</strong> (nur) für die
+laufende Kachel abgefragt und gerastert.</p>
 <p>Aus dem DOM wird die Neigung (slope) abgeleitet*, aus der u. a. die
 Hauptmaske generiert wird. Die Hauptmaske scheidet alle Rasterpixel aus,
 die bei der Auswertung vernachlässigt werden sollen. Dazu gehören:</p>
@@ -9004,8 +9006,8 @@ d. h. ausgeschiedene Pixel werden auf rechnerisch neutral
 berechnet</li>
 </ul>
 <div class="figure">
-<div class="nomnoml html-widget html-fill-item" id="htmlwidget-cafbeff82029614824cb" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-cafbeff82029614824cb">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [Raster|1m x 1m]\n  [<input>GLO|real]+-[Raster]\n  [<input>DOM]+-[Raster]\n  [<input>aspect]+-[Raster]\n  [<input>slope]+-[Raster]\n  [DOM]-->[aspect]\n  [DOM]-->[slope]\n  [DOM]--[abfragen]\n  [<input>slope]\n  [<input>aspect]\n  [<database>Gebäude-DB] ->\n    [<state>abfragen]->\n      [<choice>Gebäude?]\n  [<choice>Gebäude?] -> [<state>rastern]\n  [Gebäude?] nein ->[<end>Ende]\n  [rastern] -> [<input>GEB]\n  [<input>GLO]\n  [GEB] -> [<state>slope beschneiden|auf Gebäude]\n  [slope]-[slope beschneiden]\n  [slope beschneiden] ->\n    [<state>slope bereinigen|Grate (0-10°), Steilfl.\n       (> 70°), Inseln (0-10°)\n    ] ->\n      [<input>Generalmaske]\n  [Raster]-> [<state>maskieren]->[<input>Raster maskiert]\n  [Generalmaske]--[maskieren]\n  [Raster maskiert]->\n    [<state>ableiten|pixelweise: effektive Fläche,\n Eignungsklassen ...\n    ] ->\n      [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]\n  [auslesen] -> [<input>Tabelle|(ein Datensatz / Gebäude)]  \n// notes:\n  [<note>aus DOM-Ausdehnung]--[abfragen]\n  [<note>nach DOM-Vorlage]--[rastern]\n  [<note>image processing,\nnicht GIS:\n?imager::clean]--[slope bereinigen] \n","svg":false,"png":"./static/workflow_1.png"},"evals":[],"jsHooks":[]}</script>
+<div class="nomnoml html-widget html-fill-item" id="htmlwidget-5c13916523f23a7bf33d" style="width:672px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-5c13916523f23a7bf33d">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [Raster|1m x 1m]\n  [<database>Gemeinde-DB]->[<state>GDE abfragen]->[<state>GDE rastern]+-[Raster]\n  [<input>GLO|real]+-[Raster]\n  [<input>DOM]+-[Raster]\n  [<input>aspect]+-[Raster]\n  [<input>slope]+-[Raster]\n  [DOM]-->[aspect]\n  [DOM]-->[slope]\n  [DOM]--[abfragen]\n  [DOM]--[GDE abfragen]\n  [<input>slope]\n  [<input>aspect]\n  [<database>Gebäude-DB] ->\n    [<state>abfragen]->\n      [<choice>Gebäude?]\n  [<choice>Gebäude?] -> [<state>rastern]\n  [Gebäude?] nein ->[<end>Ende]\n  [rastern] -> [<input>GEB]\n  [<input>GLO]\n  [GEB] -> [<state>slope beschneiden|auf Gebäude]\n  [slope]-[slope beschneiden]\n  [slope beschneiden] ->\n    [<state>slope bereinigen|Grate (0-10°), Steilfl.\n       (> 70°), Inseln (0-10°)\n    ] ->\n      [<input>Generalmaske]\n  [Raster]-> [<state>maskieren]->[<input>Raster maskiert]\n  [Generalmaske]--[maskieren]\n  [Raster maskiert]->\n    [<state>ableiten|pixelweise: effektive Fläche,\n Eignungsklassen ...\n    ] ->\n      [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]\n  [auslesen] -> [<input>Tabelle|(ein Datensatz / Gebäude)]  \n// notes:\n  [<note>aus DOM-Ausdehnung]--[abfragen]\n  [<note>nach DOM-Vorlage]--[rastern]\n  [<note>image processing,\nnicht GIS:\n?imager::clean]--[slope bereinigen] \n","svg":false,"png":"./static/workflow_1.png"},"evals":[],"jsHooks":[]}</script>
 <p class="caption">
 Workflow, Teil 1
 </p>
@@ -9027,8 +9029,8 @@ gespeichert und kachelübergreifend in eine Datenbankdatei (dzt. SQLite)
 gespeichert. Letzteres ermöglicht die gemeindeweise Auswertung des
 Kachelschnitts.</p>
 <div class="figure">
-<div class="nomnoml html-widget html-fill-item" id="htmlwidget-31fa65b93d3cb93ae38d" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-31fa65b93d3cb93ae38d">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [<database>Objekt-DB]\n  [<input>Raster maskiert]->\n        [<state>ableiten|pixelweise: effektive Fläche,\n\n          Eignungsklassen ...\n        ] ->\n          [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]->\n            [<state>umformen] ->\n              [<state>joinen|mit Gemeinde-ID]->\n                [<state>speichern]\n  [Objekt-DB]--[joinen]\n  [speichern]->[<database>Ergebnis-DB|(gesamt)]\n  [speichern]->[Tabellendatei|(pro Kachel)]\n  [speichern]->[GeoTIFFs|(pro Kachel)]\n  [Raster maskiert]->[speichern]\n  // notes:\n  [<note>OBJECTIDs pro Gemeinde \naus Verschneidung\nGebäude-DB und\n  Gemeinde-Shapefile]--[Objekt-DB]           \n  [<note>immer mit OBJECTID]--[auslesen]           \n  [<note>Berechnungen auf Objektebene\n(Tabellenkalkulationen)]--[umformen]   \n        \n","svg":false,"png":"./static/workflow_2.png"},"evals":[],"jsHooks":[]}</script>
+<div class="nomnoml html-widget html-fill-item" id="htmlwidget-b0f2a53700f620b0d7b8" style="width:672px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-b0f2a53700f620b0d7b8">{"x":{"code":"\n#fill: #FEFEFF\n#lineWidth: 1\n#zoom: 4\n#direction: right\n\n\n#direction: down\n  [<database>Objekt-DB]\n  [<input>Raster maskiert]->\n        [<state>ableiten|pixelweise: effektive Fläche,\n\n          Eignungsklassen ...\n        ] ->\n          [<state>auslesen|auf Gebäude aggregiert\n(OBJECTID)]->\n            [<state>umformen] ->\n              [<state>joinen|mit Gemeinde-ID]->\n                [<state>speichern]\n  [Objekt-DB]--[joinen]\n  [speichern]->[<database>Ergebnis-DB|(gesamt)]\n  [speichern]->[Tabellendatei|(pro Kachel)]\n  [speichern]->[GeoTIFFs|(pro Kachel)]\n  [Raster maskiert]->[speichern]\n  // notes:\n  [<note>OBJECTIDs pro Gemeinde \naus Verschneidung\nGebäude-DB und\n  Gemeinde-Shapefile]--[Objekt-DB]           \n  [<note>immer mit OBJECTID]--[auslesen]           \n  [<note>Berechnungen auf Objektebene\n(Tabellenkalkulationen)]--[umformen]   \n        \n","svg":false,"png":"./static/workflow_2.png"},"evals":[],"jsHooks":[]}</script>
 <p class="caption">
 Workflow, Teil 2
 </p>

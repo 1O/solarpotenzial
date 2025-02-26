@@ -28,14 +28,16 @@ keep_large_blocks <- \(r){
 
 ## liest Raster ein, stellt zusätzliche Raster her,
 ## dazu gehört auch das kachelweise Einlesen und Rastern der Gebäude-Polygone
-prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
+prepare_rasters <- \(data_root = '.', tile_code, keep = FALSE){
   rasters <- list()
   
   ## DOM einlesen, vorerst nur, um den tile extent zu bestimmen
-  rasters$dom_full <- rast(file.path(dir_root, sprintf('input/%s/%s_DOM.tif',
-                                                       tile_code, tile_code)
+  rasters$dom_full <- rast(file.path(data_root, sprintf('DSM/%s_DOM.tif',
+                                                       tile_code)
   )
   )
+  
+  
   
   
   v_buildings <- query(v_buildings_austria, extent = rasters$dom_full)
@@ -57,9 +59,9 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
   rasters$dom_full <- NULL
   ## Globalstrahlung:
   rasters$glo <- rast(
-    file.path(dir_root,
-              sprintf('input/%s/GLO_real/%s_GLO_real_Jahressumme.tif',
-                      tile_code, tile_code))
+    file.path(data_root,
+              sprintf('GLO_real/%s_GLO_real_Jahressumme.tif', tile_code)
+              )
   )
   
   ## 8 Himmelsrichtungen, von Nord (0) bis Nordwest (7) im UZS
@@ -208,53 +210,64 @@ extract_rasters <- \(rasters, iqr_mult = 2){
 ## errechnete Werte:
 enrich_extract <- \(d){ # d ist ein data.table
   tmp <- as.data.table(d)
-  setnames(tmp, paste0('aspect_', 0:7), paste0('aspect.', constants$labels$aspect))
-  setnames(tmp, paste0('suit_', 0:5), paste0('eign.', constants$labels$eignung_solar))
-  setnames(tmp, paste0('glo_suit_', 0:5), paste0('glo_eign.', constants$labels$eignung_solar))
-  setnames(tmp, names(tmp), gsub('NaN', 'unb', names(tmp)))
+  setnames(tmp, paste0('aspect_', 0:7), paste0('aspect_', constants$labels$aspect), skip_absent=TRUE)
+  setnames(tmp, paste0('suit_', 0:5), paste0('eign_', constants$labels$eignung_solar), skip_absent=TRUE)
+  setnames(tmp, paste0('glo_suit_', 0:5), paste0('glo_eign_', constants$labels$eignung_solar), skip_absent=TRUE)
+  setnames(tmp, names(tmp), gsub('NaN', 'unb', names(tmp)), skip_absent=TRUE)
+  setnames(tmp, names(tmp), gsub('\\.', '_', names(tmp)))
   
   tmp |> as.data.frame()
 }
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
-  field_types <- c(rep('integer', 2), rep('double', 4),
-                   'integer', rep('double', 26)) |> 
-    setNames(nm = c('OBJECTID', 'GEMEINDE_ID', paste0('dom.', c('min', 'mean', 'sd', 'max')),
-                    'n_outliers', paste0('aspect.', c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW')),
-                    'flat', 'inclined', 'eign.nicht', 'eign.wenig_2040', 'eign.wenig_2020', 'eign.geeignet',
-                    'eign.gut', 'eign.sehr_gut',
-                    'glo_eign.nicht', 'glo_eign.wenig_2040', 'glo_eign.wenig_2020',
-                    'glo_eign.geeignet', 'glo_eign.gut', 'glo_eign.sehr_gut',
-                    'glo_rooftype_0', 'glo_rooftype_1',
-                    'ertrag_PV', 'ertrag_ST'
-    ))
+  dbExecute(conn, sprintf(
+    "CREATE TABLE IF NOT EXISTS %s (
+    GEMEINDE_ID text, OBJECTID text,  dom_min double, dom_mean double, 
+    dom_sd double, dom_max double, n_outliers integer, aspect_N double,
+    aspect_NO double, aspect_O double, aspect_SO double, aspect_S double,
+    aspect_SW double, aspect_W double, aspect_NW double, flat double, 
+    inclined double, eign_nicht double, eign_wenig_2040 double, 
+    eign_wenig_2020 double, eign_geeignet double, eign_gut double, 
+    eign_sehr_gut double, glo_eign_nicht double, glo_eign_wenig_2040 double, 
+    glo_eign_wenig_2020 double, glo_eign_geeignet double, glo_eign_gut double, 
+    glo_eign_sehr_gut double, glo_rooftype_0 double, glo_rooftype_1 double,
+    ertrag_PV double, ertrag_ST double,
+    
+    PRIMARY KEY(GEMEINDE_ID, OBJECTID)
+          )",
+    table_name
+  )
+  )
   
-  if(dbExistsTable(conn, table_name)) dbRemoveTable(conn, table_name)
-  dbCreateTable(conn, name = table_name, fields = field_types)
+
 }
+
+
 
 ## schreibt data.frame in SQLite-DB
 write_to_db <- \(d, table_name = 'raw', conn){ ## data.frame
-  dbWriteTable(conn = conn, name = table_name, value = d, append = TRUE)
+  dbWriteTable(conn = conn,
+               name = table_name,
+               value = d,
+               append = TRUE
+               )
 }
 
-
-
-
-
 ### Berechnung und Speicherung pro Kachel:
-calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, conn, i){
+calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, 
+                   save_excels = FALSE, conn, i
+                   ){
   cat(paste('\n', i, Sys.time(), ': '))
   cat(sprintf('working on tile %s ...', tile_code))
   cat('preparing rasters...')
-  rasters <- prepare_rasters(dir_root, tile_code) ## Arbeitsraster anlegen
+  rasters <- prepare_rasters(data_root, tile_code) ## Arbeitsraster anlegen
   
   tryCatch(
     d <- rasters |> 
       extract_rasters() |> ## Rasterwerte als data.frame extrahieren
       enrich_extract() ## zusätzliche Tabellenkalkulationen
-    , error = \(e) cat('...can\'t extract data')
+    , error = \(e) cat(paste('...can\'t extract data: ', e))
   )
   
   
@@ -265,12 +278,13 @@ calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, conn, i){
            error = \(e) cat(paste('can\'t write to database:', e))
   )
   
-
-  cat("...trying to write CSV...")
-  ## Ergebnistabelle als CSV speichern:
-  tryCatch( d |> write.csv2(file.path(dir_root, sprintf('output/data_%s.csv', tile_code))),
-            error = \(e) cat('...writing failed')
-  )
+  if(save_excels){
+    cat("...trying to write CSV...")
+    ## Ergebnistabelle als CSV speichern:
+    tryCatch( d |> write.csv2(file.path(dir_root, sprintf('output/data_%s.csv', tile_code))),
+              error = \(e) cat(paste('...writing failed: ', e))
+    )
+  }
   
   if(export_images){
     ## falls export_images == TRUE, Raster als GeoTIFFs speichern:
@@ -293,10 +307,7 @@ calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, conn, i){
 
 count_dom_outliers <- \(tile_code, buffer_size = -1, iqr_mult = 2){
   
-  r_in <- rast(file.path(dir_root, sprintf('input/%s/%s_DOM.tif',
-                                           tile_code, tile_code)
-  )
-  )
+  r_in <- rast(file.path(data_root, sprintf('DSM/%s_DOM.tif', tile_code)))
   
   v_buildings <- 
     query(v_buildings_austria, extent = ext(r_in)) |> 

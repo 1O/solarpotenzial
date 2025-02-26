@@ -3,10 +3,10 @@ title: "README"
 output:
   
   
-  word_document: default
+  html_document: default
   pdf_document:
     latex_engine: xelatex  
-  html_document: default
+  word_document: default
 date: "2025-02-21"
 ---
 
@@ -54,10 +54,12 @@ constants <- list(
 
 ### Workflow
 #### Teil 1: von den Eingangsdateien bis zur Hauptmaske
-Die in der Gebäude-DB enthaltenen Gebäudegeometrien werden nur für
+Die in der Gebäude-DB enthaltenen **Gebäudegeometrien** werden nur für
 die jeweils bearbeitete Kachel abgefragt und in ein Raster mit Auflösung
 und Projektion der DOM-Kachel umgewandelt. Dieses Raster enthält OBJECTID
 und Abgrenzung der Gebäude für die nachfolgenden Berechnungen.
+
+Analog werden die **Gemeindepolygone** (nur) für die laufende Kachel abgefragt und gerastert.
 
 Aus dem DOM wird die Neigung (slope) abgeleitet*, aus der u. a. die Hauptmaske generiert wird. Die Hauptmaske scheidet alle Rasterpixel aus, die bei der Auswertung vernachlässigt werden sollen. Dazu gehören:
 
@@ -75,6 +77,7 @@ Mit dieser Hauptmaske werden die übrigen Eingangsdaten maskiert, d. h. ausgesch
 nomnoml(code = "
 #direction: down
   [Raster|1m x 1m]
+  [<database>Gemeinde-DB]->[<state>GDE abfragen]->[<state>GDE rastern]+-[Raster]
   [<input>GLO|real]+-[Raster]
   [<input>DOM]+-[Raster]
   [<input>aspect]+-[Raster]
@@ -82,6 +85,7 @@ nomnoml(code = "
   [DOM]-->[aspect]
   [DOM]-->[slope]
   [DOM]--[abfragen]
+  [DOM]--[GDE abfragen]
   [<input>slope]
   [<input>aspect]
   [<database>Gebäude-DB] ->
