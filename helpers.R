@@ -1,14 +1,17 @@
 
 ## behält nur Pixelsammlungen über `minsize` Mindestausdehnung:
-clean_raster <- \(r){
-  ## raster auf Neigungen unter 70° beschränken:
-  r <- clamp(r, 0, 70)
-  ## Inseln < minsize entfernen:
-  im <- matrix(r, dim(r)) |> as.cimg() 
-  values(r) <- as.pixset(!is.na(im)) |> clean(constants$minsize) |> as.matrix() |> t()
+clean_raster <- \(r_buildings, r_slope){
+  r <- r_buildings
+  im_buildings <- matrix(r_buildings, dim(r_buildings)) |> as.cimg()
+  im_slope <- matrix(r_slope, dim(r_slope)) |> as.cimg()
+  ## Pixel auf Gebäudeflächen mit < 70 
+  values(r) <- as.pixset(!is.na(im_buildings) & im_slope < constants$steep) |> 
+    ## Inseln < minsize entfernen:
+    clean(constants$minsize) |> as.matrix() |> t()
   r <- subst(r, FALSE, NA)
   r
 }
+
 
 
 ## braucht knapp 7 Sekunden; stattdessen `clean_raster` verwenden
@@ -104,7 +107,7 @@ prepare_rasters <- \(dir_root = '.', tile_code, keep = FALSE){
   
   set.names(rasters$suit, 'suit')
   
-  general_mask <- clean_raster(rasters$buildings)
+  general_mask <- clean_raster(rasters$buildings, rasters$slope)
   rasters <- Map(rasters, f = \(r) mask(r, general_mask))
   rasters
 }
@@ -177,6 +180,10 @@ extract_rasters <- \(rasters, iqr_mult = 2){
     rename_with(.fn = ~ gsub('^', 'glo_', .x)) |>
     rename(OBJECTID = glo_suit_OBJECTID)
   
+  ## Jahreseinstrahlung auf Flachdächer:
+  glo_per_rooftype <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$rooftype) |> 
+    rename_with(.fn = ~ gsub('inclined', 'glo_rooftype', .x)) |> 
+    rename(OBJECTID = glo_rooftype_OBJECTID)  
   
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings)
@@ -190,6 +197,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
               aspects, rooftypes,
               suitabilities, 
               glo_per_suit,
+              glo_per_rooftype,
               harvest_pv, harvest_st
               )
   )
@@ -211,13 +219,14 @@ enrich_extract <- \(d){ # d ist ein data.table
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
   field_types <- c(rep('integer', 2), rep('double', 4),
-                   'integer', rep('double', 24)) |> 
+                   'integer', rep('double', 26)) |> 
     setNames(nm = c('OBJECTID', 'GEMEINDE_ID', paste0('dom.', c('min', 'mean', 'sd', 'max')),
                     'n_outliers', paste0('aspect.', c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW')),
                     'flat', 'inclined', 'eign.nicht', 'eign.wenig_2040', 'eign.wenig_2020', 'eign.geeignet',
                     'eign.gut', 'eign.sehr_gut',
                     'glo_eign.nicht', 'glo_eign.wenig_2040', 'glo_eign.wenig_2020',
                     'glo_eign.geeignet', 'glo_eign.gut', 'glo_eign.sehr_gut',
+                    'glo_rooftype_0', 'glo_rooftype_1',
                     'ertrag_PV', 'ertrag_ST'
     ))
   
@@ -269,7 +278,7 @@ calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, conn, i){
     tryCatch({
       Map(names(rasters),
           f = \(n) writeRaster(rasters[[n]], 
-                               sprintf('./output/%s_%s_%s.tiff', tile_code, n,
+                               sprintf('./output/%s_%s_%spx.tiff', tile_code, n,
                                        as.character(constants$minsize)
                                ),
                                overwrite = TRUE))

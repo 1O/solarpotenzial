@@ -17,15 +17,11 @@ setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
 
-# S4 method for class 'SQLiteDriver'
-sqlite_conn <- dbConnect(
-  drv = SQLite(),
-  dbname = './output/solarpotenzial.db'
-)
 
 ### Konstanten festlegen:
 constants <- list(
   flat = 10,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
+  steep = 70, # Schwellenwert (°), oberhalb dessen Steilflächen ausgenommen werden
   minsize = 3, # erforderliche Mindestausdehnung zusammenhängender Flächen (Pixel = m²)
   # zusammenhängender Dachfläche
   minbuildings = 3, ## Mindestanzahl an Gebäuden, ab der die Kachel berechnet wird
@@ -56,7 +52,6 @@ v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
-
 tile_codes <- c("26850-47525", "99999-99999", "27475-45475")
 
 
@@ -65,7 +60,11 @@ tile_codes <- c("26850-47525", "99999-99999", "27475-45475")
 ## Beschleunigung durch Maskierung von Beginn weg und wschl. Umprojektion des
 ## Gebäudevektors außerhalb von R
 
+source('./helpers.R')
 rasters <- prepare_rasters(dir_root, tile_codes[1])
+
+rasters$slope
+
 
 prepare_rasters(dir_root, tile_codes[1]) |> microbenchmark::microbenchmark(times = 5)
 
@@ -80,7 +79,7 @@ summary_table <- extract_rasters(rasters) |> enrich_extract()
 
 ### Datenbankverbindung öffnen; falls nicht vorhanden, wird Datenbank
 ### dieses Namens angelegt:
-sqlite_conn <- dbConnect(
+conn <- dbConnect(
   drv = SQLite(),
   dbname = './output/solarpotenzial.db'
 )
@@ -88,12 +87,23 @@ sqlite_conn <- dbConnect(
 #### tile codes durchschleifen:
 seq_along(tile_codes) |> 
   Map(f = \(i){
-    calc_and_save(dir_root, tile_code = tile_codes[i], conn = sqlite_conn, i = i)
-  }) |> microbenchmark::microbenchmark(times = 1)
+    calc_and_save(dir_root, tile_code = tile_codes[i],
+                  conn = conn, i = i, export_images = TRUE)
+  }) ##|> microbenchmark::microbenchmark(times = 1)
 
 
 ### Datenbankverbindung schließen:
 dbDisconnect(sqlite_conn)
+
+
+
+## DB plausen
+
+d <- dbReadTable(conn, "raw")
+
+summary(d)
+
+
 
 ## Sandbox ---------------------------------------------------------------------
 
@@ -101,6 +111,11 @@ source('./helpers.R')
 
 
 
+
+## Jahreseinstrahlung auf Flachdächer:
+get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$rooftype) |> 
+  rename_with(.fn = ~ gsub('inclined', 'glo_rooftype', .x)) |> 
+  rename(OBJECTID = glo_rooftype_OBJECTID)
 
 
 #   ## Ausreißerzahl vs. verschiedene Puffergrößen als dataframe:
