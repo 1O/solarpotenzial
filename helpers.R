@@ -156,15 +156,6 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
 }
 
 
-## Mit `zonal` können mehrere Statistiken pro Zone (hier: Gebäude) berechnet
-## und als Liste zurückgegeben werden. Diese Funktion macht aus der Liste
-## separate Spalten im dataframe. Zeitfresser.
-get_zonal_wide <- \(r_in, r_of, slug = NULL){
-  if(!is.null(slug)) set.names(r_in, slug)
-  values(r_in) <- as.character(values(r_in))
-  (zonal(r_in, r_of, table) |> as.matrix())[, -1]
-}
-
 ## Rasterwerte nach zwei kombinierten Zonenrastern summieren und umformen.
 get_areas_wide <- \(r, zones_1, zones_2, labels_wide = NULL){
   ## kombiniert Zonen; der Multiplikator für die Rasterwerte der 2. Zone sorgt
@@ -191,8 +182,6 @@ get_areas_wide <- \(r, zones_1, zones_2, labels_wide = NULL){
   tmp
 }
 
-
-?zonal
 
 ## Rasterwerte extrahieren und als dataframe zurückgeben:
 extract_rasters <- \(rasters, iqr_mult = 2){
@@ -222,7 +211,11 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   names(aspects)[1] <- 'OBJECTID'
   ## Dachneigung (flat = 0, inclined = 1)
   rooftypes <- get_areas_wide(rasters$a, rasters$buildings, rasters$rooftype) |> 
-    setNames(nm = c('OBJECTID', 'flat', 'inclined'))
+    rename(OBJECTID = 'inclined_OBJECTID',
+           inclined = 'inclined_1',
+           flat = 'inclined_0'
+    )
+
   ## Eignungsklassen
   suitabilities <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit)
   names(suitabilities)[1] <- 'OBJECTID'
@@ -235,8 +228,9 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   
   ## Jahreseinstrahlung auf Flachdächer:
   glo_per_rooftype <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$rooftype) |>
-    rename(glo_flat = "inclined_0", glo_inclined = "inclined_1") |> 
-    rename(OBJECTID = inclined_OBJECTID)  
+    rename(glo_flat = "inclined_0", glo_inclined = "inclined_1",
+           OBJECTID = inclined_OBJECTID
+           )
   
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings)
@@ -253,8 +247,8 @@ extract_rasters <- \(rasters, iqr_mult = 2){
               glo_per_rooftype,
               harvest_pv, harvest_st
               )
-  ) |> 
-    relocate(glo_flat, .before = glo_inclined)
+  ) ##|> 
+    ##relocate(glo_flat, .before = glo_inclined)
 }
 
 
