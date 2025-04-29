@@ -7,6 +7,7 @@ library(tidyr)
 library(data.table)
 library(RSQLite)
 library(imager)
+library(rio)
 
 
 ### Arbeitsumgebung setzen
@@ -16,63 +17,51 @@ dir_root <- '.'
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
-data_root <- "input"
-## DOM in Unterverzeichnis "DOM"
-## DOM in Unterverzeichnis "GLO_real"
+## Pfade zu Datenquellen:
+file_paths <- list(
+  ## Pfad zur Gebäude-Geopackage:
+  filepath_buildings = file.path(dir_root, 'input/DOM/DLM_EPSG3035.gpkg'),
+  ## Pfad zu Gemeinde-Geopackage (für gde.weise Aggregation):
+  filepath_communities = file.path(dir_root, './input/DOM/GEM_W23_3035.gpkg'),
+  ## Pfad zu Oberflächenmodell:
+  filepath_DOM = file.path('/oldhome/ivo/Dokumente/fremd/',
+                           'Christine Brendle/Solarpotenzial/R/input/DOM/'
+  ),
+  ## Pfad zu Globalstrahlung
+  filepath_GLO = file.path('/media/io/LaCie/GLO_real/')
+)
+
+
+
 
 ### Konstanten festlegen:
-constants <- list(
-  flat = 9,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
-  steep = 70, # Schwellenwert (°), oberhalb dessen Steilflächen ausgenommen werden
-  minsize = 3, # erforderliche Mindestausdehnung zusammenhängender Flächen (Pixel = m²)
-  # zusammenhängender Dachfläche
-  minbuildings = 3, ## Mindestanzahl an Gebäuden, ab der die Kachel berechnet wird
-  a_usable = .7,  # Anteil der für PV nutzbaren Dachfläche (0-1)
-  modul_m2 = 2.1,  # Fläche pro Modul [m2]
-  pv_e = .18,  # PV efficiency (0-1)
-  pv_e_f = \(irr_global) .1898 * irr_global - 3.9931, ## Regression statt Konstante
-  st_e = .4,  # ST efficiency (0-1)
-  buffer = 0,  # Puffer um Gebäudepolygone [m]; nicht puffern, die Berechnung von Neigung/Aspekt 
-  ## entfernt sowieso schon den Zellsaum;
-  intervals_solar = c(0, 550, 700, 850, 1000, 1150, Inf), ## Klassen solar
-  labels = list(
-    aspect = c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'),
-    eignung_solar = c('nicht', 'wenig_2040', 'wenig_2020', 'geeignet', 'gut', 'sehr_gut')
-    )
-)
+constants <- get_constants()
 
 #### DB-Verbindung zu Geopackage
 #### mit Gesamtdatensatz der Gebäudepolygone herstellen:
 #### die Gebäudedaten sind bereits auf EPSG3035 (LAEA) wie die Rasterdaten
 ## Gebäudelayer muss in EPSG 3035 (LAEA) sein:
-filepath_buildings <- file.path(dir_root, 'input/DEM/DLM_EPSG3035.gpkg')
-v_buildings_austria <-  vect(filepath_buildings, proxy = TRUE) ## nur Verbindung, nicht einlesen
-
+v_buildings_austria <-  vect(filepath_buildings,
+                             layer = 'DLM_EPSG3035_A',
+                             proxy = TRUE ## nur Verbindung, nicht einlesen
+)
 
 ## dasselbe für die Gemeindepolygone:
-filepath_communities <- file.path(dir_root, './input/GEM_W23_3035.gpkg')
 v_communities_austria <- vect(filepath_communities, proxy = TRUE)
-
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
-file.path(data_root, 'DOM/') |> list.files()
+source("helpers.R")
+tile_codes <- get_tile_codes(file_paths)
 
-tile_codes <- list.files(file.path(data_root, 'DOM'),
-                         pattern = '\\.tif[f]?$'
-) |> 
-  gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
-  sort()
-
-length(tile_codes) ## 14008
 
 #### Raster aus GeoTIFFs einlesen und abgeleitete Raster berechnen:
 ## Dauer: 1.8 s / Kachel
 ## Beschleunigung durch Maskierung von Beginn weg und wschl. Umprojektion des
 ## Gebäudevektors außerhalb von R
 
-source('./helpers.R')
-rasters <- prepare_rasters(data_root, tile_codes[1])
+source('helpers.R')
+rasters <- prepare_rasters(file_paths, tile_codes[1])
 
 extract_rasters(rasters) |> enrich_extract() |> rio::export("hugo.xlsx")
 
