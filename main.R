@@ -8,6 +8,7 @@ library(data.table)
 library(RSQLite)
 library(imager)
 library(rio)
+library(testthat)
 
 
 ### Arbeitsumgebung setzen
@@ -51,7 +52,6 @@ v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
-source("helpers.R")
 tile_codes <- get_tile_codes(file_paths)
 
 
@@ -60,12 +60,12 @@ tile_codes <- get_tile_codes(file_paths)
 ## Beschleunigung durch Maskierung von Beginn weg und wschl. Umprojektion des
 ## Gebäudevektors außerhalb von R
 
-source('helpers.R')
-rasters <- prepare_rasters(file_paths, tile_codes[1])
 
-extract_rasters(rasters) |> enrich_extract() |> rio::export("hugo.xlsx")
+rasters <- prepare_rasters(file_paths, tile_codes[1000])
 
+d <- extract_rasters(rasters) |> enrich_extract()
 
+d
 
 
 #### Rasterinformationen in Tabelle (data.table) zusammenführen:
