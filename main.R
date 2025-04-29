@@ -11,16 +11,18 @@ library(imager)
 
 ### Arbeitsumgebung setzen
 ## Stammverzeichnis (mit `main.R` und `helpers.R`):
-dir_root <- '~/Dokumente/fremd/Christine Brendle/Solarpotenzial/R/'
+dir_root <- '.'
 
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
 
-data_root <- "/media/ivo/LaCie/Solarpotenzial/data/Kacheln/"
+data_root <- "input"
+## DOM in Unterverzeichnis "DOM"
+## DOM in Unterverzeichnis "GLO_real"
 
 ### Konstanten festlegen:
 constants <- list(
-  flat = 10,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
+  flat = 9,  # Schwellenwert (°), unter dem Dach als flach angenommen wird
   steep = 70, # Schwellenwert (°), oberhalb dessen Steilflächen ausgenommen werden
   minsize = 3, # erforderliche Mindestausdehnung zusammenhängender Flächen (Pixel = m²)
   # zusammenhängender Dachfläche
@@ -54,13 +56,13 @@ v_communities_austria <- vect(filepath_communities, proxy = TRUE)
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
-tile_codes <- list.files(file.path(data_root, 'DSM'),
+file.path(data_root, 'DOM/') |> list.files()
+
+tile_codes <- list.files(file.path(data_root, 'DOM'),
                          pattern = '\\.tif[f]?$'
 ) |> 
   gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
   sort()
-
-
 
 length(tile_codes) ## 14008
 
@@ -70,12 +72,12 @@ length(tile_codes) ## 14008
 ## Gebäudevektors außerhalb von R
 
 source('./helpers.R')
-rasters <- prepare_rasters(data_root, tile_codes[1000])
+rasters <- prepare_rasters(data_root, tile_codes[1])
 
-extract_rasters(rasters) |> enrich_extract()
+extract_rasters(rasters) |> enrich_extract() |> rio::export("hugo.xlsx")
 
 
-plot(rasters$buildings)
+
 
 #### Rasterinformationen in Tabelle (data.table) zusammenführen:
 ## Dauer: 1.69 s pro Kachel
@@ -83,124 +85,194 @@ summary_table <- extract_rasters(rasters) |> enrich_extract()
 
 
 
-#### Durchschleifen mehrerer Kacheln:
-
+#### Durchschleifen mehrerer Kacheln, Ausgabe in MySQL-Datenbank:
 ### Datenbankverbindung öffnen; falls nicht vorhanden, wird Datenbank
 ### dieses Namens angelegt:
-conn <- dbConnect(
-  drv = SQLite(),
-  dbname = './output/solarpotenzial.db'
-)
 
 
-source('./helpers.R')
+dbDisconnect(conn) ## ggf. bestehende Verbindung schließen
+## Verbindung öffnen
+conn <- dbConnect( drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
+
+## Ausgabe-table "raw" anlegen:
 prepare_db_output_table(conn, 'raw')
 
+## Log-Datei anlegen (laufende Kachelnummer, Fehlermeldungen etc. in Datei)
+##
+sink() ## ggf. bestehenden Ausgabekanal schließen
+sink(file = "./output/process.log", append = TRUE,
+     type = c("output", "message"),
+     split = FALSE
+     )
 
 
 #### tile codes durchschleifen:
-# seq_along(10:11) |> 
-  1:1000 |> 
+  1 : length(tile_codes) |> ## ggf. ab schon prozedierter Kachel fortsetzen:
   Map(f = \(i){
+    if(!tile_codes[i] %in% c('26425-46800')){
     calc_and_save(dir_root, tile_code = tile_codes[i],
-                  conn = conn, i = i,
+                  conn = conn,
+                  i = i,
                   save_excels = FALSE,
                   export_images = FALSE
                   )
-  }) ##|> microbenchmark::microbenchmark(times = 1)
+    }
+  }) ##|> microbenchmark::microbenchmark()
+
+
+dbDisconnect(conn)
+## Ausgabe in Logdatei schließen:
+sink()
 
 
 
-
-### Datenbankverbindung schließen:
-dbDisconnect(sqlite_conn)
-
-
-
+## ---------------------------------------------------------------------------
 ## DB plausen
+## Ergebnisse nicht mehr aktuell
+### direkte DB-Abfrage
+conn <- dbConnect( drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
 
-d <- dbReadTable(conn, "raw")
+## auf eindeutige Werte filtern:
 
-summary(d)
+dbGetQuery(conn, "
+           SELECT GEMEINDE_ID, OBJECTID, tile,
+           MAX(dom_min) AS dom_min 
+           FROM raw
+           GROUP BY GEMEINDE_ID, OBJECTID, tile;
+           "
+           ) |> nrow()
 
+## eindeutige Datensätze: 4 308 682
+## Gesamtdatensätze: 4 308 682
 
+# res <- dbGetQuery(conn, "
+#            SELECT count(GEMEINDE_ID) as N,
+#            max(GEMEINDE_ID) as GEMEINDE_ID,
+#            max(OBJECTID) as OBJECTID,
+#            max(tile) as tile
+#            FROM raw
+#            GROUP BY GEMEINDE_ID, OBJECTID, tile;
+#            "d
+# )
 
-## Sandbox ---------------------------------------------------------------------
+## Dachflächen desselben Gebäudes (OBJECTID) kann auf bis zu vier Kacheln 
+## lt. Blattschnitt aufgeteilt sein, das tritt in der DB auch tatsächlich auf
+## Bsp. OBJECT 1169260 am Westrand von Siegendorf.
+## Die Flächen sind deswegen auf OBJECTID und/oder GEMEINDE_ID zu aggregieren,
+## nicht aber zusätzlich auf Kachel-ID ('tile')
 
-source('./helpers.R')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+res |> arrange(desc(N)) |> head()
 
 
 
-## Jahreseinstrahlung auf Flachdächer:
-get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$rooftype) |> 
-  rename_with(.fn = ~ gsub('inclined', 'glo_rooftype', .x)) |> 
-  rename(OBJECTID = glo_rooftype_OBJECTID)
+
+## fehlen Gemeinden?
+dbGetQuery(conn, "SELECT DISTINCT GEMEINDE_ID FROM raw") |> nrow()
+## 2047 Gemeinden
+
+## welche Gebäude fehlen? -------------------------------------------------------
+objectids_is <- (dbGetQuery(conn, "SELECT DISTINCT OBJECTID FROM raw"))$OBJECTID |> 
+  as.integer() |> sort() ## mehrere Sek.
+## ist: 4 265 981 Gebäude
+objectids_must <- (read_sf(dsn = './input/DEM/DLM_Bauwerk_nur_OBJECTID.gpkg',
+        query = 'SELECT DISTINCT OBJECTID FROM dlm_8000_bauwerk_20241118__bwk_8100_bauwerk_f_20241118'
+        ))$OBJECTID
+## soll: 4 487 063 Gebäude (lt. DLM-GPKG)
+objectids_missing <- setdiff(objectids_must, objectids_is)
+length(objectids_missing) ## 221 082 Gebäude fehlen
 
 
-#   ## Ausreißerzahl vs. verschiedene Puffergrößen als dataframe:
-# tile_code <- tile_codes[1]
-# res2 <- data.frame(buffer_size = 3 - .2 * 0:30) |>
-#   rowwise() |>
-#   mutate(outlier_count = count_dom_outliers(tile_code, buffer_size = buffer_size))
-# 
-# write.csv(res, file.path("output", sprintf("%s_outliers.csv", tile_code)))
-# 
-# library(ggplot2)
-# left_join(res, res2, by = 'buffer_size') |>
-#   as.data.frame() |> 
-#   tidyr::pivot_longer(2:3) |> 
-#   arrange(name) |>
-#   mutate(value = (value-min(value))/(max(value)-min(value)), .by = name) |> 
-#   ggplot(aes(buffer_size, value, col = name)) + geom_point() + geom_line() +
-#   geom_vline(aes(xintercept = constants$buffer), lty='dashed') +
-#   labs(title = 'Ausreißer DOM vs. Pufferdistanz', x = 'Pufferdistanz [m]', y = 'Anzahl Ausreißerpixel (=Fläche in m2)',
-#                    caption = sprintf(
-#                      'Beispielkacheln %s; \npositive / negative Pufferdistanz: Gebäudeumriss wird erweitert / beschnitten',
-#                      paste(tile_codes, collapse = ', ')
-#                      )
-#   )
-# 
-# 
-# ggsave('./output/outliers_vs_buffer.png')
-# 
-# 
-# hist_slope <- rasters$slope |> values() |> hist()
-# 
-# hist_slope[c('mids', 'counts')] |> as.data.frame() |> 
-#   mutate(coverage = cumsum(counts),
-#          rel_coverage = 100 * coverage / max(coverage)
-#          ) |> 
-#   ggplot(aes(mids, rel_coverage)) + geom_line() + geom_point() +
-#   labs(x = 'Dachneigung', y = 'erfasste Dachfläche [%]',
-#        title = '27475-45475 (Salzburg)')
-# 
-# 
-# 
-# ggsave('./output/dom_coverage_vs_slope_salzburg.png')
-#
+## Darstellung der fehlenden Gebäude:
+v_objects <- read_sf(dsn = './input/DEM/DLM_Bauwerk_nur_OBJECTID.gpkg', 
+                        layer = 'dlm_8000_bauwerk_20241118__bwk_8100_bauwerk_f_20241118'
+)
+
+v_objects_missing <- v_objects |>
+  filter(OBJECTID %in% objectids_missing) |> 
+  mutate(area = st_area(geom) |> as.double())
+## v_objects_missing |> write_sf('./output/objects_missing.shp') ## als SHP speichern
+
+## Größe der fehlenden Gebäude
+areas <- v_objects_missing |> mutate(area = st_area(geom)) |> pull(area)
+                               
+v_objects_missing |> filter(area > 500) |> write_sf('large_missing_objects.shp')
+
+
+
+
+tile_codes_is <- (dbGetQuery(conn, "SELECT DISTINCT tile FROM raw"))$tile
+length(tile_codes_is)
+## 12183 Kacheln
+tile_codes_must <- list.files(file.path(data_root, 'DSM'),
+                                            pattern = '\\.tif[f]?$'
+) |> 
+  gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
+  sort()
+
+tile_codes_missing <- setdiff(tile_codes_must, tile_codes_is)
+length(tile_codes_missing) ## 825 Kacheln übergangen
+
+## Welche Kacheln fehlen?
+tile_shapes <- read_sf("./blattschnitt.shp")
+tile_shapes_missing <- tile_shapes |> filter(name %in% tile_codes_missing)
+tile_shapes_missing |> plot()
+## tile_shapes_missing |> write_sf('./blattschnitt_missing.shp') ## ggf. als Shape speichern
+
+
+
+
+## Aggregieren der Rohdaten aus SQLite-DB:
+conn <- dbConnect( drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
+
+
+
+d <- dbGetQuery(conn, "SELECT * FROM raw LIMIT 1000")
+
+head(d)
+d |> rio::export("hugo.xlsx")
+  
+  
+getwd()
+
+?c_across
+
+d <- dbGetQuery(conn, "SELECT * FROM raw")
+
+d[,
+  lapply(.SD, \(xs) sum(xs, na.rm = TRUE)),
+  .SDcols = names(d)[lapply(d, is.numeric) |> unlist()],
+  keyby = .(GEMEINDE_ID)
+] |> rio::export("roh.xlsx")
+
+
+## Tests:
+
+
+set.seed(123)
+rasters <- list()
+## 16 Pixel, mit Globalstrahlung um 1200 kW
+rasters$glo <- rast(matrix(1200 + 50 * rnorm(16), 4, 4))
+names(rasters$glo) <- "glo"
+
+
+## Raster mit zwei Hälften (links, rechts)
+rasters$buildings <- rast(matrix(gl(2, 8), 4, 4))
+names(rasters$buildings) <- "buildings"
+
+## Raster mit zwei Klassen (buildings um 90° rotiert)
+rasters$suit <- t(rasters$buildings)
+names(rasters$suit) <- "suitability"
+
+## A und B müssen äquivalent sein
+## A:
+get_areas_wide(rasters$glo, rasters$buildings, rasters$suit)
+## B:
+data.frame(glo = values(rasters$glo),
+      buildings = values(rasters$buildings),
+      suit = values(rasters$suit)
+      ) |> 
+  summarise(glo = sum(glo), .by = c(buildings, suitability)) |> 
+  pivot_wider(names_from = suitability, values_from = glo)
+## OK
+
+
