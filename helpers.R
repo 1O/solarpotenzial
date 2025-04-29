@@ -215,7 +215,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
            inclined = 'inclined_1',
            flat = 'inclined_0'
     )
-
+ 
   ## Eignungsklassen
   suitabilities <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit)
   names(suitabilities)[1] <- 'OBJECTID'
@@ -409,13 +409,22 @@ validate <- \(d){
       summarise(across(starts_with("eign_"), ~ sum(.x, na.rm = TRUE))) |>
       rowSums()
   )
-  # Gleichheit Solarstrahlung nach Neigung bzw. Eignung:
+  ## Gleichheit Solarstrahlung nach Neigung bzw. Eignung:
   expect_equal(
     d |> summarise(across(c(glo_flat, glo_inclined), ~ sum(.x, na.rm = TRUE))) |>
       rowSums(),
     d |> summarise(across(starts_with("glo_eign_"), ~ sum(.x, na.rm = TRUE))) |>
       rowSums()
   )
+  ## die Summe der geneigten Dachfläche sollte die der Flachdächer übersteigen: 
+  expect_gt(
+    sum(d$inclined, na.rm = TRUE),
+    sum(d$flat, na.rm = TRUE)
+  )
+  
+  
 }
+
+
 
 
