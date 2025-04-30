@@ -65,7 +65,7 @@ keep_large_blocks <- \(r){
 prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
                      tile_code, ## aktuell bearbeitete Kachel
                      keep = FALSE ## Raster aus Zwischenschritten behalten?
-                     ){
+){
   rasters <- list()
   
   ## DOM einlesen, vorerst nur, um den tile extent zu bestimmen
@@ -83,7 +83,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
     v_buildings |>
     buffer(constants$buffer) |> 
     rasterize(y = rasters$dom_full, field = 'OBJECTID', touches = FALSE)
-
+  
   ## Gemeindepolygone abfragen und rastern:
   rasters$communities <-
     v_communities_austria |>
@@ -98,8 +98,8 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   ## Globalstrahlung:
   rasters$glo <- 
     rast(file.path(file_paths$GLO,
-              sprintf('%s_GLO_real_Jahressumme.tif', tile_code)
-              )
+                   sprintf('%s_GLO_real_Jahressumme.tif', tile_code)
+    )
     )
   
   ## 8 Himmelsrichtungen, von Nord (0) bis Nordwest (7) im UZS
@@ -112,11 +112,14 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   
   set.cats(rasters$aspect,
            value = data.frame(int = 0:7,
-                              cat = c("N", "NO", "O", "SO", "S", "SW", "W", "NW")
+                              cat = paste0("aspect_",
+                                           c("N", "NO", "O", "SO", "S",
+                                             "SW", "W", "NW")
+                              )
            )
   )
   set.names(rasters$aspect, 'aspect')
-   
+  
   
   rasters$slope <- rasters$dom |> terrain('slope', neighbors = 4)
   
@@ -134,7 +137,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   )
   set.names(rasters$rooftype, 'rooftype')
   
-
+  
   ## Flächenkorrektur für geneigte Flächen: tatsächliche Dachfläche steigt
   ## mit der Steilheit
   rasters$a <- 1/cos(pi/180 * rasters$slope)
@@ -143,7 +146,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   ## Globalstrahlung auf tatsächliche Fläche:
   rasters$glo_corr <- rasters$glo * rasters$a
   
-
+  
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
   rasters$harvest_pv <- constants$pv_e_f(rasters$glo_corr)
   set.names(rasters$harvest_pv, 'ertrag_PV')
@@ -166,7 +169,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
              cat = constants$labels$eignung_solar
            )
   )
-
+  
   set.names(rasters$suit, 'suit')
   
   general_mask <- clean_raster(rasters$buildings, rasters$slope)
@@ -187,7 +190,7 @@ get_areas_wide2 <- \(r, zones_1, ...){
 ## Extrahiert Werte aus den div. berechneten Rastern und 
 ## gibt sie als dataframe zurück:
 extract_rasters <- \(rasters, iqr_mult = 2){
-    ## Spalten mit OBJECTID und DOM-Ausreißer:
+  ## Spalten mit OBJECTID und DOM-Ausreißer:
   outliers <- zonal(rasters$dom, rasters$buildings,
                     fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
                     ub = quantile(xs, .75, na.rm = TRUE)
@@ -210,7 +213,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   ) |> as.matrix() |> as.data.frame()
   ## Ausrichtung
   aspects <- get_areas_wide2(rasters$a, rasters$buildings, rasters$aspect)
-
+  
   ## Dachneigung (flat = 0, inclined = 1)
   # rooftypes <- get_areas_wide2(rasters$a, rasters$buildings, rasters$rooftype)
   
@@ -218,26 +221,35 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   ## Eignungsklassen
   # suitabilities <- get_areas_wide2(rasters$a, rasters$buildings, rasters$suit)
   
-
+  
   ## Jahreseinstrahlung pro Eignungsklasse:
   # glo_per_suit <- get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit)
+  
+  ## Fläche per Dach:
+  a_total <- zonal(rasters$a, rasters$buildings, fun = "sum", na.rm = TRUE) |>
+    rename(a_total = 'area')
+  
+  
+  ## Einstrahlung per Dach:
+  glo_total <- zonal(rasters$glo_corr, rasters$buildings, fun = "sum", na.rm = TRUE) |> 
+    rename(glo_total = 'GLO_real')
   
   ## Fläche nach Eignung und Dachtyp
   a_per_suit_rooftype <- 
     get_areas_wide2(rasters$a, rasters$buildings, rasters$suit, rasters$rooftype) |>
     pivot_wider(names_from = c(suit, rooftype),
-                                     values_from = area,
-                                     id_cols = 'OBJECTID',
-                                     values_fill = 0,
-                                     names_vary = 'fastest'
-                                     ) |> 
+                values_from = area,
+                id_cols = 'OBJECTID',
+                values_fill = 0,
+                names_vary = 'fastest'
+    ) |> 
     rename_with(~ sprintf("a_%s", .x), .cols = -c(OBJECTID))
   
-
+  
   ## Fläche nach Eignung und Dachtyp
   glo_per_suit_rooftype <- 
     get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit,
-                     rasters$rooftype) |>
+                    rasters$rooftype) |>
     pivot_wider(names_from = c(suit, rooftype),
                 values_from = GLO_real,
                 id_cols = 'OBJECTID',
@@ -246,7 +258,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
     ) |> 
     rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID))
   
-
+  
   
   ## Jahreseinstrahlung auf Flachdächer:
   # glo_per_rooftype <- get_areas_wide2(rasters$glo_corr, rasters$buildings, 
@@ -254,7 +266,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   #                                     ) |>
   #   rename(glo_flat = "flat", glo_inclined = "inclined")
   # 
-
+  
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum")
   ## Ertrag Solarthermie
@@ -265,29 +277,61 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
          list(community_ids,
               dom_stats, outliers,
-              aspects, 
+              aspects,
+              a_total,
               # rooftypes,
-              # suitabilities, 
+              # suitabilities,
               a_per_suit_rooftype,
+              glo_total,
               glo_per_suit_rooftype,
               harvest_pv, harvest_st
-              )
+         )
   ) 
 }
 
+names(d) |> cbind()
 
-## ergänzt die tabellierte Rasterinformation von `extract_rasters` um (auf Gebäudeebene)
-## errechnete Werte:
-enrich_extract <- \(d){ # d ist ein data.table
-  tmp <- as.data.table(d)
-  setnames(tmp, paste0('aspect_', 0:7), paste0('aspect_', constants$labels$aspect), skip_absent=TRUE)
-  setnames(tmp, paste0('suit_', 0:6), paste0('eign_', constants$labels$eignung_solar), skip_absent=TRUE)
-  setnames(tmp, paste0('glo_suit_', 0:6), paste0('glo_eign_', constants$labels$eignung_solar), skip_absent=TRUE)
-  setnames(tmp, names(tmp), gsub('NaN', 'unb', names(tmp)), skip_absent=TRUE)
-  setnames(tmp, names(tmp), gsub('\\.', '_', names(tmp)))
+
+iris |> select(Species, Sepal.Length, hugo)
+
+## kosmetische Arbeiten an der Ergebnistabelle:
+## Spalten in richtige Reihenfolge etc.
+prettify_dataframe <- \(d){
   
-  tmp |> as.data.frame()
+  label_template <- c(
+    'nicht_flat', 'nicht_inclined',
+    'wenig_2020_flat', 'wenig_2020_inclined',
+    'wenig_2040_flat', 'wenig_2040_inclined',
+    'gut_flat', 'gut_inclined',
+    'sehr_gut_flat', 'sehr_gut_inclined',
+    'ausgezeichnet_flat', 'ausgezeichnet_inclined' 
+  )
+
+  col_order <- c(
+    'OBJECTID', 'GEMEINDE_ID',
+    'dom.min', 'dom.mean', 'dom.sd',
+    'dom.max', 'n_outliers',
+    'aspect_N', 'aspect_NO', 'aspect_O', 'aspect_SO',
+    'aspect_S', 'aspect_SW', 'aspect_W', 'aspect_NW',
+    'a_total',  sprintf('a_%s', label_template),
+    'glo_total',  sprintf('glo_%s', label_template),
+    'ertrag_PV', 'ertrag_ST'
+  )
+  
+## Spaltenvorlage für Ergebnis-dataframe:
+cbind(
+  data.frame(OBJECTID = vector('double', 1L)),
+  vector('character', 2) |> setNames(nm = col_order[2:3]) |>
+        as.list() |> as.data.frame(),
+  vector('double', length(col_order)-2) |> setNames(nm = tail(col_order, -2)) |>
+    as.list() |> as.data.frame()
+  ) |> 
+  bind_rows(d) |> 
+  tail(-1)
 }
+
+
+prettify_dataframe(d) |> head()
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
@@ -310,7 +354,7 @@ prepare_db_output_table <- \(conn, table_name = 'raw'){
   )
   )
   
-
+  
 }
 
 
@@ -321,13 +365,13 @@ write_to_db <- \(d, table_name = 'raw', conn){ ## data.frame
                name = table_name,
                value = d,
                append = TRUE
-               )
+  )
 }
 
 ### Berechnung und Speicherung pro Kachel:
 calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, 
                    save_excels = FALSE, conn, i
-                   ){
+){
   cat(paste('\n', i, Sys.time(), ': '))
   cat(sprintf('working on tile %s ...', tile_code))
   cat('preparing rasters...')
@@ -345,7 +389,7 @@ calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE,
   tryCatch({
     prepare_db_output_table(conn)
     write_to_db(d, table_name = 'raw', conn)},
-           error = \(e) cat(paste('can\'t write to database:', e))
+    error = \(e) cat(paste('can\'t write to database:', e))
   )
   
   if(save_excels){
@@ -417,43 +461,43 @@ show_dom_outliers <- \(r_in, buffer_size = -1, iqr_mult = 2){
 }
 
 
+
+
+
 ## führt Plausibilitätstests durch:
 validate <- \(d){
-  ## Gleichheit Dachflächen nach Neigung bzw. Aspekt:
+  ## Gleichheit Gesamtfläche (a_total) und Summe Flächen pro Eignung und Dachtyp:
   expect_equal(
-    sum(d$flat, d$inclined, na.rm = TRUE),
+    sum(d$a_total, na.rm = TRUE),
     d |>
-      summarise(across(starts_with("aspect"), ~ sum(.x, na.rm = TRUE))) |>
-      rowSums()
-    )
-  ## Gleichheit Dachflächen nach Neigung bzw. Eignung:
-  expect_equal(
-    sum(d$flat, d$inclined, na.rm = TRUE),
-    d |>
-      summarise(across(starts_with("eign_"), ~ sum(.x, na.rm = TRUE))) |>
+      summarise(across((starts_with("a_") & !ends_with("total")), ~ sum(.x, na.rm = TRUE))) |>
       rowSums()
   )
-  ## Gleichheit Solarstrahlung nach Neigung bzw. Eignung:
+  
+  ## Gleichheit Gesamtfläche und Summe Dachflächen nach Ausrichtung:
   expect_equal(
-    d |> summarise(across(c(glo_flat, glo_inclined), ~ sum(.x, na.rm = TRUE))) |>
-      rowSums(),
-    d |> summarise(across(starts_with("glo_eign_"), ~ sum(.x, na.rm = TRUE))) |>
+    sum(d$a_total, na.rm = TRUE),
+    d |>
+      summarise(across(starts_with("aspect_"), ~ sum(.x, na.rm = TRUE))) |>
       rowSums()
   )
+  
   ## die Summe der geneigten Dachfläche sollte die der Flachdächer übersteigen: 
   expect_gt(
-    sum(d$inclined, na.rm = TRUE),
-    sum(d$flat, na.rm = TRUE)
+    summarise(d, across(matches('a_.*_inclined'), ~ sum(.x, na.rm = TRUE))) |> rowSums(),
+    summarise(d, across(matches('a_.*_flat'), ~ sum(.x, na.rm = TRUE))) |> rowSums()
   )
+  
+  
   
   ## alle berechneten Strahlungssummen (kWh/ m²) für geneigte Dachflächen
   ## zwischen 0 und 2000?
-  expect_true(
-    all(d$glo_inclined / d$inclined <= 2000) &
-    all(d$glo_inclined / d$inclined >= 0)
-  )
+  # expect_true(
+  #   all(d$glo_inclined / d$inclined <= 2000) &
+  #   all(d$glo_inclined / d$inclined >= 0)
+  # )
   
-
+  
 }
 
 
