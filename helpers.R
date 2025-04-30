@@ -119,7 +119,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
            )
   )
   set.names(rasters$aspect, 'aspect')
-  
+   
   
   rasters$slope <- rasters$dom |> terrain('slope', neighbors = 4)
   
@@ -132,8 +132,12 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
                          c(constants$flat, Inf),
                          0:1)
     )
-  set.names(rasters$rooftype, 'inclined')
+  set.cats(rasters$rooftype,
+           value = data.frame(int = 0:1, cat = c('flat', 'inclined'))
+  )
+  set.names(rasters$rooftype, 'rooftype')
   
+
   ## Flächenkorrektur für geneigte Flächen: tatsächliche Dachfläche steigt
   ## mit der Steilheit
   rasters$a <- 1/cos(pi/180 * rasters$slope)
