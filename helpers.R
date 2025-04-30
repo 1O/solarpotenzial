@@ -8,9 +8,10 @@ get_constants <- \() {
     minbuildings = 3, ## Mindestanzahl an Gebäuden, ab der die Kachel berechnet wird
     a_usable = .7,  # Anteil der für PV nutzbaren Dachfläche (0-1)
     modul_m2 = 2.1,  # Fläche pro Modul [m2]
-    pv_e = .18,  # PV efficiency (0-1)
-    pv_e_f = \(irr_global) .1898 * irr_global - 3.9931, ## Regression statt Konstante
-    st_e = .4,  # ST efficiency (0-1)
+    pv_e = .18,  # PV efficiency (0-1): Konstante zur Umrechnung Globalstrahlung > Photovoltaik
+    pv_e_f = \(x) .2534 * x - 22.707, ## Regression zur Umrechnung
+    st_e = .4,  # ST efficiency (0-1): Konstante zur Umrechnung Globalstrahlung > Solarthermie
+    st_e_f = \(x) .3785 * x - 34.37, ## Regression zur Umrechnung
     buffer = 0,  # Puffer um Gebäudepolygone [m]; nicht puffern, die Berechnung von Neigung/Aspekt 
     ## entfernt sowieso schon den Zellsaum;
     intervals_solar = c(0, 550, 700, 850, 1000, 1150, 1300, Inf), ## Klassen solar
@@ -135,7 +136,8 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   set.cats(rasters$rooftype,
            value = data.frame(int = 0:1, cat = c('flat', 'inclined'))
   )
-  set.names(rasters$rooftype, 'rooftype')
+  set.names(rasters$rooftype, 'Warmwasser: .3785x - 34,37
+PV: ,2534x - 22,707rooftype')
   
   
   ## Flächenkorrektur für geneigte Flächen: tatsächliche Dachfläche steigt
@@ -152,7 +154,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   set.names(rasters$harvest_pv, 'ertrag_PV')
   
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
-  rasters$harvest_st <- constants$st_e * rasters$glo_corr
+  rasters$harvest_st <- constants$st_e_f(rasters$glo_corr)
   set.names(rasters$harvest_st, 'ertrag_ST')
   
   ## Raster mit eignung_solar hinzufügen und Kategorielabels setzen:
