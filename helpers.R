@@ -289,10 +289,6 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   ) 
 }
 
-names(d) |> cbind()
-
-
-iris |> select(Species, Sepal.Length, hugo)
 
 ## kosmetische Arbeiten an der Ergebnistabelle:
 ## Spalten in richtige Reihenfolge etc.
@@ -317,15 +313,15 @@ prettify_dataframe <- \(d){
     'ertrag_PV', 'ertrag_ST'
   )
   
-## Spaltenvorlage für Ergebnis-Dataframe:
 
+  ## Spaltenvorlage für Ergebnis-Dataframe ...
   rep(NA, length(col_order)) |> setNames(nm = col_order) |>
     as.list() |> list2DF() |> 
+  ## ... Ergebniszeilen anbinden:
     bind_rows(d) |> 
-    tail(-1)
+    tail(-1) |>
+    mutate(across(where(is.numeric), ~ replace_na(.x, 0)))
 }
-
-
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
