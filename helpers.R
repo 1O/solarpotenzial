@@ -309,8 +309,7 @@ prettify_dataframe <- \(d){
 
   col_order <- c(
     'OBJECTID', 'GEMEINDE_ID',
-    'dom.min', 'dom.mean', 'dom.sd',
-    'dom.max', 'n_outliers',
+    'dom.min', 'dom.mean', 'dom.sd', 'dom.max', 'n_outliers',
     'aspect_N', 'aspect_NO', 'aspect_O', 'aspect_SO',
     'aspect_S', 'aspect_SW', 'aspect_W', 'aspect_NW',
     'a_total',  sprintf('a_%s', label_template),
@@ -318,20 +317,15 @@ prettify_dataframe <- \(d){
     'ertrag_PV', 'ertrag_ST'
   )
   
-## Spaltenvorlage für Ergebnis-dataframe:
-cbind(
-  data.frame(OBJECTID = vector('double', 1L)),
-  vector('character', 2) |> setNames(nm = col_order[2:3]) |>
-        as.list() |> as.data.frame(),
-  vector('double', length(col_order)-2) |> setNames(nm = tail(col_order, -2)) |>
-    as.list() |> as.data.frame()
-  ) |> 
-  bind_rows(d) |> 
-  tail(-1)
+## Spaltenvorlage für Ergebnis-Dataframe:
+
+  rep(NA, length(col_order)) |> setNames(nm = col_order) |>
+    as.list() |> list2DF() |> 
+    bind_rows(d) |> 
+    tail(-1)
 }
 
 
-prettify_dataframe(d) |> head()
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
