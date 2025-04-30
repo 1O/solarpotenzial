@@ -13,10 +13,10 @@ get_constants <- \() {
     st_e = .4,  # ST efficiency (0-1)
     buffer = 0,  # Puffer um Gebäudepolygone [m]; nicht puffern, die Berechnung von Neigung/Aspekt 
     ## entfernt sowieso schon den Zellsaum;
-    intervals_solar = c(0, 550, 700, 850, 1000, 1150, Inf), ## Klassen solar
+    intervals_solar = c(0, 550, 700, 850, 1000, 1150, 1300, Inf), ## Klassen solar
     labels = list(
       aspect = c('N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'),
-      eignung_solar = c('nicht', 'wenig_2040', 'wenig_2020', 'geeignet', 'gut', 'sehr_gut')
+      eignung_solar = c('nicht', 'wenig_2040', 'wenig_2020', 'geeignet', 'gut', 'sehr_gut', 'ausgezeichnet')
     )
   )
 }
@@ -25,7 +25,7 @@ get_constants <- \() {
 
 
 get_tile_codes <- \(file_paths){
-  tile_codes <- list.files(file_paths$filepath_DOM,
+  tile_codes <- list.files(file_paths$DOM,
                            pattern = '\\.tif[f]?$'
   ) |> 
     gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
@@ -71,7 +71,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   rasters <- list()
   
   ## DOM einlesen, vorerst nur, um den tile extent zu bestimmen
-  rasters$dom_full <- rast(file.path(file_paths$filepath_DOM,
+  rasters$dom_full <- rast(file.path(file_paths$DOM,
                                      sprintf('%s_DOM.tif', tile_code)
   )
   )
@@ -99,7 +99,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   
   ## Globalstrahlung:
   rasters$glo <- 
-    rast(file.path(file_paths$filepath_GLO,
+    rast(file.path(file_paths$GLO,
               sprintf('%s_GLO_real_Jahressumme.tif', tile_code)
               )
     )
@@ -112,7 +112,14 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
                          c(0, 1:7, 0)
     )
     )
+  
+  set.cats(rasters$aspect,
+           value = data.frame(int = 0:7,
+                              cat = c("N", "NO", "O", "SO", "S", "SW", "W", "NW")
+           )
+  )
   set.names(rasters$aspect, 'aspect')
+  
   
   rasters$slope <- rasters$dom |> terrain('slope', neighbors = 4)
   
@@ -133,18 +140,18 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   set.names(rasters$a, 'area')
 
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
-  rasters$harvest_pv <- rasters$a * constants$pv_e_f(rasters$glo)
+  rasters$harvest_pv <- constants$pv_e_f(rasters$a * rasters$glo)
   set.names(rasters$harvest_pv, 'ertrag_PV')
   
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
-  rasters$harvest_st <- rasters$a * constants$st_e * rasters$glo
+  rasters$harvest_st <- constants$st_e * rasters$a * rasters$glo
   set.names(rasters$harvest_st, 'ertrag_ST')
   
   ## Raster mit eignung_solar hinzufügen und Kategorielabels setzen:
   rasters$suit <- rasters$glo |> classify(cbind(
     head(constants$intervals_solar, -1), ## von
     tail(constants$intervals_solar, -1), ## bis
-    0:5 ## Klassenindex (0 = ungeeignet, 5 = sehr gut geeignet)
+    0:6 ## Klassenindex (0 = ungeeignet, 5 = sehr gut geeignet)
   )
   )
   
@@ -154,6 +161,15 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   rasters <- Map(rasters, f = \(r) mask(r, general_mask))
   rasters
 }
+
+
+get_areas_wide2 <- \(r, zones_1, zones_2, labels_wide = NULL){
+  zonal(r, c(zones_1, zones_2))
+}
+
+
+
+get_areas_wide2(rasters$a, rasters$rooftype, rasters$aspect)
 
 
 ## Rasterwerte nach zwei kombinierten Zonenrastern summieren und umformen.
@@ -220,6 +236,10 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   suitabilities <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit)
   names(suitabilities)[1] <- 'OBJECTID'
   
+  ## Flächen per Eignung und rooftype
+  
+  
+  
   ## Jahreseinstrahlung pro Eignungsklasse:
   glo_per_suit <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$suit) |> 
     rename_with(.fn = ~ gsub('^', 'glo_', .x)) |>
@@ -232,10 +252,14 @@ extract_rasters <- \(rasters, iqr_mult = 2){
            OBJECTID = inclined_OBJECTID
            )
   
+  
+  
+  
   ## Ertrag PV
-  harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings)
+  harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum")
   ## Ertrag Solarthermie
-  harvest_st <- zonal(rasters$harvest_st, rasters$buildings)
+  harvest_st <- zonal(rasters$harvest_st, rasters$buildings, fun = "sum")
+  
   
   ## alle zu data.frame joinen:
   Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
@@ -257,8 +281,8 @@ extract_rasters <- \(rasters, iqr_mult = 2){
 enrich_extract <- \(d){ # d ist ein data.table
   tmp <- as.data.table(d)
   setnames(tmp, paste0('aspect_', 0:7), paste0('aspect_', constants$labels$aspect), skip_absent=TRUE)
-  setnames(tmp, paste0('suit_', 0:5), paste0('eign_', constants$labels$eignung_solar), skip_absent=TRUE)
-  setnames(tmp, paste0('glo_suit_', 0:5), paste0('glo_eign_', constants$labels$eignung_solar), skip_absent=TRUE)
+  setnames(tmp, paste0('suit_', 0:6), paste0('eign_', constants$labels$eignung_solar), skip_absent=TRUE)
+  setnames(tmp, paste0('glo_suit_', 0:6), paste0('glo_eign_', constants$labels$eignung_solar), skip_absent=TRUE)
   setnames(tmp, names(tmp), gsub('NaN', 'unb', names(tmp)), skip_absent=TRUE)
   setnames(tmp, names(tmp), gsub('\\.', '_', names(tmp)))
   
@@ -353,7 +377,7 @@ calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE,
 
 count_dom_outliers <- \(tile_code, buffer_size = -1, iqr_mult = 2){
   
-  r_in <- rast(sprintf(file_paths$filepath_DOM, sprintf('%s_DOM.tif', tile_code)))
+  r_in <- rast(sprintf(file_paths$DOM, sprintf('%s_DOM.tif', tile_code)))
   
   v_buildings <- 
     query(v_buildings_austria, extent = ext(r_in)) |> 
@@ -422,9 +446,24 @@ validate <- \(d){
     sum(d$flat, na.rm = TRUE)
   )
   
+  ## alle berechneten Strahlungssummen (kWh/ m²) für geneigte Dachflächen
+  ## zwischen 0 und 2000?
+  expect_true(
+    all(d$glo_inclined / d$inclined <= 2000) &
+    all(d$glo_inclined / d$inclined >= 0)
+  )
   
+
 }
 
 
+# validate(d)
 
-
+# par(mfrow = c(2, 2))
+# 
+# (rasters$glo * rasters$a) |> plot()
+# rasters$glo |> plot()
+# 
+# constants$pv_e_f((rasters$glo * rasters$a)) |> plot()
+# 
+# 
