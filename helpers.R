@@ -230,8 +230,10 @@ extract_rasters <- \(rasters, iqr_mult = 2){
                                      id_cols = 'OBJECTID',
                                      values_fill = 0,
                                      names_vary = 'fastest'
-                                     )
+                                     ) |> 
+    rename_with(~ sprintf("a_%s", .x), .cols = -c(OBJECTID))
   
+
   ## Fläche nach Eignung und Dachtyp
   glo_per_suit_rooftype <- 
     get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit,
@@ -241,9 +243,11 @@ extract_rasters <- \(rasters, iqr_mult = 2){
                 id_cols = 'OBJECTID',
                 values_fill = 0,
                 names_vary = 'fastest'
-    )
+    ) |> 
+    rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID))
   
 
+  
   ## Jahreseinstrahlung auf Flachdächer:
   # glo_per_rooftype <- get_areas_wide2(rasters$glo_corr, rasters$buildings, 
   #                                     rasters$rooftype
