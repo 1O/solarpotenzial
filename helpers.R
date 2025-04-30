@@ -209,26 +209,47 @@ extract_rasters <- \(rasters, iqr_mult = 2){
                      }
   ) |> as.matrix() |> as.data.frame()
   ## Ausrichtung
-  aspects <- get_areas_wide(rasters$a, rasters$buildings, rasters$aspect)
-  names(aspects)[1] <- 'OBJECTID'
+  aspects <- get_areas_wide2(rasters$a, rasters$buildings, rasters$aspect)
+
   ## Dachneigung (flat = 0, inclined = 1)
-  rooftypes <- get_areas_wide2(rasters$a, rasters$buildings, rasters$rooftype)
+  # rooftypes <- get_areas_wide2(rasters$a, rasters$buildings, rasters$rooftype)
   
   
   ## Eignungsklassen
-  suitabilities <- get_areas_wide2(rasters$a, rasters$buildings, rasters$suit)
+  # suitabilities <- get_areas_wide2(rasters$a, rasters$buildings, rasters$suit)
   
 
   ## Jahreseinstrahlung pro Eignungsklasse:
-  glo_per_suit <- get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit)
+  # glo_per_suit <- get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit)
   
+  ## Fläche nach Eignung und Dachtyp
+  a_per_suit_rooftype <- 
+    get_areas_wide2(rasters$a, rasters$buildings, rasters$suit, rasters$rooftype) |>
+    pivot_wider(names_from = c(suit, rooftype),
+                                     values_from = area,
+                                     id_cols = 'OBJECTID',
+                                     values_fill = 0,
+                                     names_vary = 'fastest'
+                                     )
   
+  ## Fläche nach Eignung und Dachtyp
+  glo_per_suit_rooftype <- 
+    get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit,
+                     rasters$rooftype) |>
+    pivot_wider(names_from = c(suit, rooftype),
+                values_from = GLO_real,
+                id_cols = 'OBJECTID',
+                values_fill = 0,
+                names_vary = 'fastest'
+    )
+  
+
   ## Jahreseinstrahlung auf Flachdächer:
-  glo_per_rooftype <- get_areas_wide2(rasters$glo_corr, rasters$buildings, 
-                                      rasters$rooftype
-                                      ) |>
-    rename(glo_flat = "flat", glo_inclined = "inclined")
-  
+  # glo_per_rooftype <- get_areas_wide2(rasters$glo_corr, rasters$buildings, 
+  #                                     rasters$rooftype
+  #                                     ) |>
+  #   rename(glo_flat = "flat", glo_inclined = "inclined")
+  # 
 
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum")
@@ -240,10 +261,11 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
          list(community_ids,
               dom_stats, outliers,
-              aspects, rooftypes,
-              suitabilities, 
-              glo_per_suit,
-              glo_per_rooftype,
+              aspects, 
+              # rooftypes,
+              # suitabilities, 
+              a_per_suit_rooftype,
+              glo_per_suit_rooftype,
               harvest_pv, harvest_st
               )
   ) 
