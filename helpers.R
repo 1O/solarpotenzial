@@ -327,26 +327,31 @@ prettify_dataframe <- \(d){
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
-  dbExecute(conn, sprintf(
-    "CREATE TABLE IF NOT EXISTS %s (
-    GEMEINDE_ID text, OBJECTID text,  dom_min double, dom_mean double, 
-    dom_sd double, dom_max double, n_outliers integer, aspect_N double,
-    aspect_NO double, aspect_O double, aspect_SO double, aspect_S double,
-    aspect_SW double, aspect_W double, aspect_NW double, flat double, 
-    inclined double, eign_nicht double, eign_wenig_2040 double, 
-    eign_wenig_2020 double, eign_geeignet double, eign_gut double, 
-    eign_sehr_gut double, glo_eign_nicht double, glo_eign_wenig_2040 double, 
-    glo_eign_wenig_2020 double, glo_eign_geeignet double, glo_eign_gut double, 
-    glo_eign_sehr_gut double, glo_rooftype_0 double, glo_rooftype_1 double,
-    ertrag_PV double, ertrag_ST double,
-    
+  dbExecute(conn, sprintf("
+    CREATE TABLE IF NOT EXISTS %s (
+OBJECTID integer, GEMEINDE_ID integer,
+dom.min double, dom.mean double, dom.sd double, dom.max double,
+n_outliers integer,
+aspect_N double, aspect_NO double, aspect_O double, aspect_SO double,
+aspect_S double, aspect_SW double, aspect_W double, aspect_NW double,
+a_total double, a_nicht_flat double, a_nicht_inclined double,
+a_wenig_2020_flat double, a_wenig_2020_inclined double,
+a_wenig_2040_flat double, a_wenig_2040_inclined double,
+a_gut_flat double, a_gut_inclined double, a_sehr_gut_flat double,
+a_sehr_gut_inclined double, a_ausgezeichnet_flat double,
+a_ausgezeichnet_inclined double, glo_total double, glo_nicht_flat double,
+glo_nicht_inclined double, glo_wenig_2020_flat double,
+glo_wenig_2020_inclined double, glo_wenig_2040_flat double,
+glo_wenig_2040_inclined double, glo_gut_flat double,
+glo_gut_inclined double, glo_sehr_gut_flat double,
+glo_sehr_gut_inclined double, glo_ausgezeichnet_flat double,
+glo_ausgezeichnet_inclined double,
+ertrag_PV double, ertrag_ST double,
     PRIMARY KEY(GEMEINDE_ID, OBJECTID)
-          )",
+)",
     table_name
   )
   )
-  
-  
 }
 
 
