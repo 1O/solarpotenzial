@@ -159,7 +159,12 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   )
   )
   
-  set.names(rasters$suit, 'suit')
+  set.cats(rasters$suit,
+           value = data.frame(int = seq_along(head(constants$intervals_solar, -1)),
+                              cat = constants$labels$eignung_solar
+           )
+  )
+    set.names(rasters$suit, 'suit')
   
   general_mask <- clean_raster(rasters$buildings, rasters$slope)
   rasters <- Map(rasters, f = \(r) mask(r, general_mask))
