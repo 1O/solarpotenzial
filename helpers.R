@@ -22,8 +22,6 @@ get_constants <- \() {
 }
 
 
-
-
 get_tile_codes <- \(file_paths){
   tile_codes <- list.files(file_paths$DOM,
                            pattern = '\\.tif[f]?$'
@@ -104,7 +102,6 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
               )
     )
   
-  
   ## 8 Himmelsrichtungen, von Nord (0) bis Nordwest (7) im UZS
   rasters$aspect <- rasters$dom |> terrain('aspect', neighbors = 4) |>
     classify(rcl = cbind(c(0:8 * 45) - 22.5,
@@ -142,13 +139,17 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   ## mit der Steilheit
   rasters$a <- 1/cos(pi/180 * rasters$slope)
   set.names(rasters$a, 'area')
+  
+  ## Globalstrahlung auf tatsächliche Fläche:
+  rasters$glo_corr <- rasters$glo * rasters$a
+  
 
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
-  rasters$harvest_pv <- constants$pv_e_f(rasters$a * rasters$glo)
+  rasters$harvest_pv <- constants$pv_e_f(rasters$glo_corr)
   set.names(rasters$harvest_pv, 'ertrag_PV')
   
   ## PV-Ertrag aus Globalstrahlung real und Fläche:
-  rasters$harvest_st <- constants$st_e * rasters$a * rasters$glo
+  rasters$harvest_st <- constants$st_e * rasters$glo_corr
   set.names(rasters$harvest_st, 'ertrag_ST')
   
   ## Raster mit eignung_solar hinzufügen und Kategorielabels setzen:
@@ -160,11 +161,13 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   )
   
   set.cats(rasters$suit,
-           value = data.frame(int = seq_along(head(constants$intervals_solar, -1)),
-                              cat = constants$labels$eignung_solar
+           value = data.frame(
+             int = -1 + seq_along(head(constants$intervals_solar, -1)),
+             cat = constants$labels$eignung_solar
            )
   )
-    set.names(rasters$suit, 'suit')
+
+  set.names(rasters$suit, 'suit')
   
   general_mask <- clean_raster(rasters$buildings, rasters$slope)
   rasters <- Map(rasters, f = \(r) mask(r, general_mask))
@@ -172,43 +175,17 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
 }
 
 
-get_areas_wide2 <- \(r, zones_1, zones_2, labels_wide = NULL){
-  zonal(r, c(zones_1, zones_2))
+## Flächen per Eignung und rooftype
+
+
+## zonale Auswertung für mehr als ein Zonenraster:
+get_areas_wide2 <- \(r, zones_1, ...){
+  zonal(r, c(zones_1, ...), fun = "sum", na.rm = TRUE)
 }
 
 
-
-get_areas_wide2(rasters$a, rasters$rooftype, rasters$aspect)
-
-
-## Rasterwerte nach zwei kombinierten Zonenrastern summieren und umformen.
-get_areas_wide <- \(r, zones_1, zones_2, labels_wide = NULL){
-  ## kombiniert Zonen; der Multiplikator für die Rasterwerte der 2. Zone sorgt
-  ## für eindeutige Werte, die später wieder durch Mod-division und Mod den
-  ## jeweiligen Kategorien von Raster 1 und 2 zugeordnet werden können.
-  
-  ## der Modul muss höher als das Maximum eindeutiger Rasterwerte beider
-  ## Gruppierungszonen sein:
-  the_mod <- 1 + max(length(unique(values(zones_1))),
-                     length(unique(values(zones_2)))
-  ) 
-  
-  zones <- the_mod * zones_1 + zones_2
-  tmp <- zonal(r, zones, sum, na.rm = FALSE)
-  
-  tmp <- cbind(tmp, tmp[1] %/% the_mod, tmp[1] %% the_mod) |> 
-    setNames(c(names(tmp), names(zones_2), names(zones_1))) |>  
-    select(-1) |>
-    pivot_wider(names_from = names(zones_1),
-                values_from = names(r)
-    )
-  names(tmp)[1] <- names(zones_1)
-  names(tmp) <- paste(names(zones_2), names(tmp), sep='_')
-  tmp
-}
-
-
-## Rasterwerte extrahieren und als dataframe zurückgeben:
+## Extrahiert Werte aus den div. berechneten Rastern und 
+## gibt sie als dataframe zurück:
 extract_rasters <- \(rasters, iqr_mult = 2){
     ## Spalten mit OBJECTID und DOM-Ausreißer:
   outliers <- zonal(rasters$dom, rasters$buildings,
@@ -235,35 +212,24 @@ extract_rasters <- \(rasters, iqr_mult = 2){
   aspects <- get_areas_wide(rasters$a, rasters$buildings, rasters$aspect)
   names(aspects)[1] <- 'OBJECTID'
   ## Dachneigung (flat = 0, inclined = 1)
-  rooftypes <- get_areas_wide(rasters$a, rasters$buildings, rasters$rooftype) |> 
-    rename(OBJECTID = 'inclined_OBJECTID',
-           inclined = 'inclined_1',
-           flat = 'inclined_0'
-    )
- 
+  rooftypes <- get_areas_wide2(rasters$a, rasters$buildings, rasters$rooftype)
+  
+  
   ## Eignungsklassen
-  suitabilities <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit)
-  names(suitabilities)[1] <- 'OBJECTID'
+  suitabilities <- get_areas_wide2(rasters$a, rasters$buildings, rasters$suit)
   
-  ## Flächen per Eignung und rooftype
-  
-  
-  
-  ## Jahreseinstrahlung pro Eignungsklasse:
-  glo_per_suit <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$suit) |> 
-    rename_with(.fn = ~ gsub('^', 'glo_', .x)) |>
-    rename(OBJECTID = glo_suit_OBJECTID)
 
+  ## Jahreseinstrahlung pro Eignungsklasse:
+  glo_per_suit <- get_areas_wide2(rasters$glo_corr, rasters$buildings, rasters$suit)
+  
   
   ## Jahreseinstrahlung auf Flachdächer:
-  glo_per_rooftype <- get_areas_wide(rasters$a * rasters$glo, rasters$buildings, rasters$rooftype) |>
-    rename(glo_flat = "inclined_0", glo_inclined = "inclined_1",
-           OBJECTID = inclined_OBJECTID
-           )
+  glo_per_rooftype <- get_areas_wide2(rasters$glo_corr, rasters$buildings, 
+                                      rasters$rooftype
+                                      ) |>
+    rename(glo_flat = "flat", glo_inclined = "inclined")
   
-  
-  
-  
+
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum")
   ## Ertrag Solarthermie
@@ -280,8 +246,7 @@ extract_rasters <- \(rasters, iqr_mult = 2){
               glo_per_rooftype,
               harvest_pv, harvest_st
               )
-  ) ##|> 
-    ##relocate(glo_flat, .before = glo_inclined)
+  ) 
 }
 
 
