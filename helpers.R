@@ -213,62 +213,81 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
                      }
   ) |> as.matrix() |> as.data.frame()
   ## Ausrichtung
-  aspects <- get_areas_wide(rasters$a, rasters$buildings, rasters$aspect)
+  a_per_aspect <- get_areas_wide(rasters$a, rasters$buildings, rasters$aspect) |> 
+      rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
  
   ## Fläche per Dach:
   a_total <- zonal(rasters$a, rasters$buildings, fun = "sum", na.rm = TRUE) |>
     rename(a_total = 'area')
   
+  ## Fläche nach Dachtyp (flach / geneigt):
+  a_per_rooftype <- get_areas_wide(rasters$a, rasters$buildings, rasters$rooftype) |>
+    rename_with(~ sprintf('a_%s', .x), .cols = c(flat, inclined))
+  
+  ## Fläche nach Eignungsklasse:
+  a_per_suit <- get_areas_wide(rasters$a, rasters$buildings, rasters$suit) |>
+    rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
   
   ## Einstrahlung per Dach:
   glo_total <- zonal(rasters$glo_corr, rasters$buildings, fun = "sum", na.rm = TRUE) |> 
     rename(glo_total = 'GLO_real')
   
-  ## Fläche nach Eignung und Dachtyp
-  a_per_suit_rooftype <- 
-    get_areas_wide(rasters$a, rasters$buildings, rasters$suit, rasters$rooftype) |>
-    pivot_wider(names_from = c(suit, rooftype),
-                values_from = area,
-                id_cols = 'OBJECTID',
-                values_fill = 0,
-                names_vary = 'fastest'
-    ) |> 
-    rename_with(~ sprintf("a_%s", .x), .cols = -c(OBJECTID))
+  ## Einstrahlung per Dachtyp:
+  glo_per_rooftype <- get_areas_wide(rasters$glo_corr, rasters$buildings, rasters$rooftype) |>
+    rename_with(~ sprintf('glo_%s', .x), .cols = c(flat, inclined))
   
   
-  ## Fläche nach Eignung und Dachtyp
-  glo_per_suit_rooftype <- 
-    get_areas_wide(rasters$glo_corr, rasters$buildings, rasters$suit,
-                    rasters$rooftype) |>
-    pivot_wider(names_from = c(suit, rooftype),
-                values_from = GLO_real,
-                id_cols = 'OBJECTID',
-                values_fill = 0,
-                names_vary = 'fastest'
-    ) |> 
-    rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID))
-  
+  ## Einstrahlung nach Eignungsklasse:
+  glo_per_suit <- get_areas_wide(rasters$glo_corr, rasters$buildings, rasters$suit) |>
+    rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
 
   ## Ertrag PV
-  harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum")
+  harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum", na.rm = TRUE)
+  
   ## Ertrag Solarthermie
-  harvest_st <- zonal(rasters$harvest_st, rasters$buildings, fun = "sum")
+  harvest_st <- zonal(rasters$harvest_st, rasters$buildings, fun = "sum", na.rm = TRUE)
   
+  if(multizonal) { ## diese aufwendigen Berechnungen nur bei multizonal = TRUE:
+    
+    ## Fläche nach Eignung und Dachtyp
+    a_per_suit_rooftype <- 
+      get_areas_wide(rasters$a, rasters$buildings, rasters$suit, rasters$rooftype) |>
+      pivot_wider(names_from = c(suit, rooftype),
+                  values_from = area,
+                  id_cols = 'OBJECTID',
+                  values_fill = 0,
+                  names_vary = 'fastest'
+      ) |> 
+      rename_with(~ sprintf("a_%s", .x), .cols = -c(OBJECTID))
+    
+    
+    ## Fläche nach Eignung und Dachtyp
+    glo_per_suit_rooftype <- 
+      get_areas_wide(rasters$glo_corr, rasters$buildings, rasters$suit,
+                     rasters$rooftype) |>
+      pivot_wider(names_from = c(suit, rooftype),
+                  values_from = GLO_real,
+                  id_cols = 'OBJECTID',
+                  values_fill = 0,
+                  names_vary = 'fastest'
+      ) |> 
+      rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID))
+  }
+
+  ## welche Objekte sind dataframes und enthalten mindestens eine der in
+  ## table_definition festgelegten Spaltennamen?
+  names_dataframes <- 
+    ls() |>
+    Filter(f = \(o) is.data.frame(get(o))) |> 
+    Filter(f = \(d) length(intersect(names(get(d)), names(table_definition))))
   
-  ## alle zu data.frame joinen:
-  Reduce(f = \(a, b) left_join(a, b, by = 'OBJECTID'),
-         list(community_ids,
-              dom_stats, outliers,
-              aspects,
-              a_total,
-              # rooftypes,
-              # suitabilities,
-              a_per_suit_rooftype,
-              glo_total,
-              glo_per_suit_rooftype,
-              harvest_pv, harvest_st
-         )
-  ) 
+  print("names dataframes:")
+  print(names_dataframes)
+  
+
+  ## gewünschte dataframes joinen:
+  tail(names_dataframes, -1) |> 
+    Reduce(f = \(L, R) left_join(L, get(R)), init = get(names_dataframes[1]))
 }
 
 
