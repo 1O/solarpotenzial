@@ -138,8 +138,7 @@ prepare_rasters <- \(file_paths, ## Pfade zu Eingaberastern/-vektoren
   set.cats(rasters$rooftype,
            value = data.frame(int = 0:1, cat = c('flat', 'inclined'))
   )
-  set.names(rasters$rooftype, 'Warmwasser: .3785x - 34,37
-PV: ,2534x - 22,707rooftype')
+  set.names(rasters$rooftype, 'rooftype')
   
   
   ## Flächenkorrektur für geneigte Flächen: tatsächliche Dachfläche steigt
@@ -191,7 +190,7 @@ get_areas_wide <- \(r, zones_1, ...){
 
 ## Extrahiert Werte aus den div. berechneten Rastern und 
 ## gibt sie als dataframe zurück:
-extract_rasters <- \(rasters, iqr_mult = 2){
+extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
   ## Spalten mit OBJECTID und DOM-Ausreißer:
   outliers <- zonal(rasters$dom, rasters$buildings,
                     fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
@@ -289,35 +288,17 @@ prettify_dataframe <- \(d){
 }
 
 
-prettify_dataframe(d) |> head()
-
-
+## SQLITE Tabelle erzeugen,
+## die Spaltendefinitionen  stammen aus table_definition.R:
 prepare_db_output_table <- \(conn, table_name = 'raw'){
-  dbExecute(conn, sprintf("
-    CREATE TABLE IF NOT EXISTS %s (
-OBJECTID integer, GEMEINDE_ID integer,
-dom.min double, dom.mean double, dom.sd double, dom.max double,
-n_outliers integer,
-aspect_N double, aspect_NO double, aspect_O double, aspect_SO double,
-aspect_S double, aspect_SW double, aspect_W double, aspect_NW double,
-a_total double, a_nicht_flat double, a_nicht_inclined double,
-a_wenig_2020_flat double, a_wenig_2020_inclined double,
-a_wenig_2040_flat double, a_wenig_2040_inclined double,
-a_gut_flat double, a_gut_inclined double, a_sehr_gut_flat double,
-a_sehr_gut_inclined double, a_ausgezeichnet_flat double,
-a_ausgezeichnet_inclined double, glo_total double, glo_nicht_flat double,
-glo_nicht_inclined double, glo_wenig_2020_flat double,
-glo_wenig_2020_inclined double, glo_wenig_2040_flat double,
-glo_wenig_2040_inclined double, glo_gut_flat double,
-glo_gut_inclined double, glo_sehr_gut_flat double,
-glo_sehr_gut_inclined double, glo_ausgezeichnet_flat double,
-glo_ausgezeichnet_inclined double,
-ertrag_PV double, ertrag_ST double,
-    PRIMARY KEY(GEMEINDE_ID, OBJECTID)
-)",
-    table_name
-  )
-  )
+  statement <-
+    sprintf("CREATE TABLE IF NOT EXISTS %s (%s,
+            PRIMARY KEY(GEMEINDE_ID, OBJECTID))",
+            table_name,
+            paste(names(table_definition), table_definition) |> 
+              paste(collapse = ', ')
+    )
+  dbExecute(conn, statement)
 }
 
 
