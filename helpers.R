@@ -23,6 +23,8 @@ get_constants <- \() {
 }
 
 
+
+
 get_tile_codes <- \(file_paths){
   tile_codes <- list.files(file_paths$DOM,
                            pattern = '\\.tif[f]?$'
@@ -295,35 +297,19 @@ extract_rasters <- \(rasters, iqr_mult = 2){
 ## kosmetische Arbeiten an der Ergebnistabelle:
 ## Spalten in richtige Reihenfolge etc.
 prettify_dataframe <- \(d){
-  
-  label_template <- c(
-    'nicht_flat', 'nicht_inclined',
-    'wenig_2020_flat', 'wenig_2020_inclined',
-    'wenig_2040_flat', 'wenig_2040_inclined',
-    'gut_flat', 'gut_inclined',
-    'sehr_gut_flat', 'sehr_gut_inclined',
-    'ausgezeichnet_flat', 'ausgezeichnet_inclined' 
-  )
-
-  col_order <- c(
-    'OBJECTID', 'GEMEINDE_ID',
-    'dom.min', 'dom.mean', 'dom.sd', 'dom.max', 'n_outliers',
-    'aspect_N', 'aspect_NO', 'aspect_O', 'aspect_SO',
-    'aspect_S', 'aspect_SW', 'aspect_W', 'aspect_NW',
-    'a_total',  sprintf('a_%s', label_template),
-    'glo_total',  sprintf('glo_%s', label_template),
-    'ertrag_PV', 'ertrag_ST'
-  )
-  
 
   ## Spaltenvorlage für Ergebnis-Dataframe ...
-  rep(NA, length(col_order)) |> setNames(nm = col_order) |>
+  rep(NA, length(table_definition)) |> 
+    setNames(nm = names(table_definition)) |>
     as.list() |> list2DF() |> 
   ## ... Ergebniszeilen anbinden:
     bind_rows(d) |> 
     tail(-1) |>
     mutate(across(where(is.numeric), ~ replace_na(.x, 0)))
 }
+
+
+prettify_dataframe(d) |> head()
 
 
 prepare_db_output_table <- \(conn, table_name = 'raw'){
