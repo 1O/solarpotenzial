@@ -280,10 +280,6 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
     ls() |>
     Filter(f = \(o) is.data.frame(get(o))) |> 
     Filter(f = \(d) length(intersect(names(get(d)), names(table_definition))))
-  
-  print("names dataframes:")
-  print(names_dataframes)
-  
 
   ## gewünschte dataframes joinen:
   tail(names_dataframes, -1) |> 
@@ -310,13 +306,13 @@ prettify_dataframe <- \(d){
 ## SQLITE Tabelle erzeugen,
 ## die Spaltendefinitionen  stammen aus table_definition.R:
 prepare_db_output_table <- \(conn, table_name = 'raw'){
-  statement <-
-    sprintf("CREATE TABLE IF NOT EXISTS %s (%s,
+  statement <- sprintf("CREATE TABLE IF NOT EXISTS %s (%s,
             PRIMARY KEY(GEMEINDE_ID, OBJECTID))",
             table_name,
             paste(names(table_definition), table_definition) |> 
               paste(collapse = ', ')
     )
+  
   dbExecute(conn, statement)
 }
 
@@ -332,9 +328,10 @@ write_to_db <- \(d, table_name = 'raw', conn){ ## data.frame
 }
 
 ### Berechnung und Speicherung pro Kachel:
-calc_and_save <- \(dir_root = '.', tile_code, export_images = FALSE, 
+calc_and_save <- \(file_paths, tile_code, export_images = FALSE, 
                    save_excels = FALSE, conn, i
 ){
+ 
   cat(paste('\n', i, Sys.time(), ': '))
   cat(sprintf('working on tile %s ...', tile_code))
   cat('preparing rasters...')
