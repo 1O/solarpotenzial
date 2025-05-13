@@ -47,6 +47,10 @@ v_buildings_austria <- vect(file_paths$buildings,
        proxy = TRUE ## nur Verbindung, nicht einlesen
   )
 
+## Gemeindegrenzen:
+v_communities_austria <- vect(file_paths$communities, proxy = TRUE)
+
+plot(v_communities_austria)
 
 get_tile_codes <- \(file_paths){
   tile_codes <- list.files(file_paths$DOM,
@@ -59,9 +63,12 @@ get_tile_codes <- \(file_paths){
 }
 
 
+tile_code <- "26850-47525"
+
 source('helpers.R')
-rasters |> extract_rasters(multizonal = TRUE) |> 
-  # prettify_dataframe() |>
+prepare_rasters(file_paths = file_paths, tile_code = tile_code) |> 
+ extract_rasters(multizonal = FALSE) |> 
+  #prettify_dataframe() |>
   names()
 
 ### Berechnung und Speicherung pro Kachel:

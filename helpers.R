@@ -193,6 +193,7 @@ get_areas_wide <- \(r, zones_1, ...){
 extract_rasters <- \(rasters, iqr_mult = 2, ...){
   multizonal <- list(...)$multizonal
   multizonal <- ifelse(length(multizonal), multizonal, FALSE)
+  
   ## Spalten mit OBJECTID und DOM-Ausreißer:
   outliers <- zonal(rasters$dom, rasters$buildings,
                     fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
