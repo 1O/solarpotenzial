@@ -1,10 +1,10 @@
 table_definition <- c(
   'OBJECTID' = 'integer',
   'GEMEINDE_ID' = 'integer',
-  'dom.min' = 'double',
-  'dom.mean' = 'double',
-  'dom.sd' = 'double',
-  'dom.max' = 'double',
+  'dom_min' = 'double',
+  'dom_mean' = 'double',
+  'dom_sd' = 'double',
+  'dom_max' = 'double',
   'n_outliers' = 'integer',
   'a_total' = 'double',
   'a_aspect_N' = 'double',
@@ -15,8 +15,15 @@ table_definition <- c(
   'a_aspect_SW' = 'double',
   'a_aspect_W' = 'double',
   'a_aspect_NW' = 'double',
-  'a_per_rooftype' = 'double',
-  'a_per_suit' = 'double',
+  'a_flat' = 'double',
+  'a_inclined' = 'double',
+  'a_nicht' = 'double',
+  'a_wenig_2020' = 'double',
+  'a_wenig_2040' = 'double',
+  'a_geeignet' = 'double',
+  'a_gut' = 'double',
+  'a_sehr_gut' = 'double',
+  'a_ausgezeichnet' = 'double',
   'a_nicht_flat' = 'double',
   'a_nicht_inclined' = 'double',
   'a_wenig_2020_flat' = 'double',
@@ -30,7 +37,8 @@ table_definition <- c(
   'a_ausgezeichnet_flat' = 'double',
   'a_ausgezeichnet_inclined' = 'double',
   'glo_total' = 'double',
-  'glo_per_rooftype' = 'double',
+  'glo_flat' = 'double',
+  'glo_inclined' = 'double',
   'glo_nicht_flat' = 'double',
   'glo_nicht_inclined' = 'double',
   'glo_wenig_2020_flat' = 'double',
@@ -46,5 +54,4 @@ table_definition <- c(
   'ertrag_PV' = 'double',
   'ertrag_ST' = 'double'
 )
-
 

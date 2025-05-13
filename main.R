@@ -11,29 +11,29 @@ library(rio)
 library(testthat)
 
 
-### Arbeitsumgebung setzen
+### Arbeitsumgebung setzenDOM
 ## Stammverzeichnis (mit `main.R` und `helpers.R`):
 dir_root <- '.'
 
+
+
 setwd(dir_root) ## Stammverzeichnis als Arbeitsverzeichnis
 source('./helpers.R') ## Hilfsfunktionen laden
+source('./table_definition.R')
 
 ## Pfade zu Datenquellen:
 file_paths <- list(
   ## Pfad zur Gebäude-Geopackage:
-  filepath_buildings = file.path(dir_root, 'input/DOM/DLM_EPSG3035.gpkg'),
+  buildings = file.path(dir_root, 'input/DOM/DLM_EPSG3035.gpkg'),
   ## Pfad zu Gemeinde-Geopackage (für gde.weise Aggregation):
-  filepath_communities = file.path(dir_root, './input/DOM/GEM_W23_3035.gpkg'),
+  communities = file.path(dir_root, './input/DOM/GEM_W23_3035.gpkg'),
   ## Pfad zu Oberflächenmodell:
-  filepath_DOM = file.path('/oldhome/ivo/Dokumente/fremd/',
-                           'Christine Brendle/Solarpotenzial/R/input/DOM/'
-  ),
+  # DOM = file.path('/oldhome/ivo/Dokumente/fremd/','Christine Brendle/Solarpotenzial/R/input/DOM/'),
+  DOM = file.path('./input/Testkacheln/26850-47525/DOM/'), ## Gleisdorf
   ## Pfad zu Globalstrahlung
-  filepath_GLO = file.path('/media/io/LaCie/GLO_real/')
+  GLO = file.path('./input/Testkacheln/26850-47525/GLO_real/')
+  ##GLO = file.path('/media/io/LaCie/GLO_real/')
 )
-
-
-
 
 ### Konstanten festlegen:
 constants <- get_constants()
@@ -42,38 +42,188 @@ constants <- get_constants()
 #### mit Gesamtdatensatz der Gebäudepolygone herstellen:
 #### die Gebäudedaten sind bereits auf EPSG3035 (LAEA) wie die Rasterdaten
 ## Gebäudelayer muss in EPSG 3035 (LAEA) sein:
-v_buildings_austria <-  vect(filepath_buildings,
-                             layer = 'DLM_EPSG3035_A',
-                             proxy = TRUE ## nur Verbindung, nicht einlesen
-)
+v_buildings_austria <- vect(file_paths$buildings,
+       layer = 'DLM_EPSG3035_A',
+       proxy = TRUE ## nur Verbindung, nicht einlesen
+  )
+
+
+get_tile_codes <- \(file_paths){
+  tile_codes <- list.files(file_paths$DOM,
+                           pattern = '\\.tif[f]?$'
+  ) |> 
+    gsub(pattern = '(.*)_.*', replacement = '\\1') |> 
+    sort()
+  cat(sprintf("%.0f DOM tiles found", length(tile_codes)))
+  tile_codes
+}
+
+
+source('helpers.R')
+rasters |> extract_rasters(multizonal = TRUE) |> 
+  # prettify_dataframe() |>
+  names()
+
+### Berechnung und Speicherung pro Kachel:
+calc_and_save <- \(file_paths, tile_code, export_images = FALSE,
+                   multizonal = FALSE,
+                   save_excels = FALSE, conn, i
+){
+  
+  cat(paste('\n', i, Sys.time(), ': '))
+  cat(sprintf('working on tile %s ...', tile_code))
+  cat('preparing rasters...')
+  rasters <- prepare_rasters(file_paths, tile_code) ## Arbeitsraster anlegen
+  
+  tryCatch(
+    d <- rasters |> 
+      extract_rasters() |> ## Rasterwerte als data.frame extrahieren
+      prettify_dataframe() ## zusätzliche Tabellenkalkulationen
+    , error = \(e) cat(paste('...can\'t extract data: ', e))
+  )
+  
+  
+  
+  
+  cat("...trying to write to database ...")
+  tryCatch({
+    prepare_db_output_table(conn)
+    write_to_db(d, table_name = 'raw', conn)},
+    error = \(e) cat(paste('can\'t write to database:', e))
+  )
+  
+  if(save_excels){
+    cat("...trying to write CSV...")
+    ## Ergebnistabelle als CSV speichern:
+    tryCatch( d |> write.csv2(file.path(dir_root, sprintf('output/data_%s.csv', tile_code))),
+              error = \(e) cat(paste('...writing failed: ', e))
+    )
+  }
+  
+  if(export_images){
+    ## falls export_images == TRUE, Raster als GeoTIFFs speichern:
+    cat("...trying to save tiffs...")
+    tryCatch({
+      Map(names(rasters),
+          f = \(n) writeRaster(rasters[[n]], 
+                               sprintf('./output/%s_%s_%spx.tiff', tile_code, n,
+                                       as.character(constants$minsize)
+                               ),
+                               overwrite = TRUE))
+    },
+    error = \(e) cat('...saving tiff failed')
+    )
+  }
+}
+
+
+
+
+count_dom_outliers <- \(tile_code, buffer_size = -1, iqr_mult = 2){
+  
+  r_in <- rast(sprintf(file_paths$DOM, sprintf('%s_DOM.tif', tile_code)))
+  
+  v_buildings <- 
+    query(v_buildings_austria, extent = ext(r_in)) |> 
+    buffer(buffer_size)
+  
+  r_buildings <- v_buildings |> rasterize(y = r_in, field = 'OBJECTID')
+  
+  zonal(r_in, r_buildings,
+        fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
+        ub = quantile(xs, .75, na.rm = TRUE)
+        bw = iqr_mult * (ub - lb)
+        sum((xs < lb - bw) | (xs > ub + bw), na.rm = TRUE)
+        }
+  )[, 2] |> sum()
+}
+
+
+show_dom_outliers <- \(r_in, buffer_size = -1, iqr_mult = 2){
+  ## zeigt Ausreißer im DOM pro Gebäude an; dauert 10 s. oder länger
+  v_buildings <- 
+    query(v_buildings_austria, extent = ext(r_in)) |> 
+    buffer(buffer_size)
+  
+  r_buildings <- v_buildings |> rasterize(y = r_in, field = 'OBJECTID')
+  r_outliers <- zonal(r_in, r_buildings,
+                      fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
+                      ub = quantile(xs, .75, na.rm = TRUE)
+                      bw = iqr_mult * (ub - lb)
+                      c(lb - bw, ub + bw)
+                      },
+                      as.raster = TRUE
+                      
+  ) 
+  set.names(r_outliers, c('low', 'high'))
+  (r_in < r_outliers$low | r_in > r_outliers$high) |>  
+    clamp(1, 1, values = FALSE)  
+}
+
+
+
+
+
+## führt Plausibilitätstests durch:
+validate <- \(d){
+  ## Gleichheit Gesamtfläche (a_total) und Summe Flächen pro Eignung und Dachtyp:
+  expect_equal(
+    sum(d$a_total, na.rm = TRUE),
+    d |>
+      summarise(across((starts_with("a_") & !ends_with("total")), ~ sum(.x, na.rm = TRUE))) |>
+      rowSums()
+  )
+  
+  ## Gleichheit Gesamtfläche und Summe Dachflächen nach Ausrichtung:
+  expect_equal(
+    sum(d$a_total, na.rm = TRUE),
+    d |>
+      summarise(across(starts_with("aspect_"), ~ sum(.x, na.rm = TRUE))) |>
+      rowSums()
+  )
+  
+  ## die Summe der geneigten Dachfläche sollte die der Flachdächer übersteigen: 
+  expect_gt(
+    summarise(d, across(matches('a_.*_inclined'), ~ sum(.x, na.rm = TRUE))) |> rowSums(),
+    summarise(d, across(matches('a_.*_flat'), ~ sum(.x, na.rm = TRUE))) |> rowSums()
+  )
+  
+  
+  
+  ## alle berechneten Strahlungssummen (kWh/ m²) für geneigte Dachflächen
+  ## zwischen 0 und 2000?
+  # expect_true(
+  #   all(d$glo_inclined / d$inclined <= 2000) &
+  #   all(d$glo_inclined / d$inclined >= 0)
+  # )
+  
+  
+}
+
+
 
 ## dasselbe für die Gemeindepolygone:
-v_communities_austria <- vect(filepath_communities, proxy = TRUE)
+v_communities_austria <- vect(file_paths$communities, proxy = TRUE)
 
 ## Berechnungen ----------------------------------------------------------------
 ### Anwendungsbsp:
 tile_codes <- get_tile_codes(file_paths)
 
-
 #### Raster aus GeoTIFFs einlesen und abgeleitete Raster berechnen:
 ## Dauer: 1.8 s / Kachel
 ## Beschleunigung durch Maskierung von Beginn weg und wschl. Umprojektion des
 ## Gebäudevektors außerhalb von R
-
-source("helpers.R")
-rasters <- prepare_rasters(file_paths, tile_codes[30])
-
-rasters$glo |> plot()
-
-
-d <- extract_rasters(rasters) |> enrich_extract()
+rasters <- prepare_rasters(file_paths, tile_codes[1])
 
 
 
 #### Rasterinformationen in Tabelle (data.table) zusammenführen:
-## Dauer: 1.69 s pro Kachel
-summary_table <- extract_rasters(rasters) |> enrich_extract()
+## Dauer: 1.69 s pro Kachel, falls nicht mehrfache zonale Auswertungen gemacht
+## werden sollen (z. B. Fläche pro Eignungsklasse UND Dachtyp)
+## falls multizonale Auswertungen gemacht werden sollen: 8,47 s (!) pro Kachel
 
+source("helpers.R")
+extract_rasters(rasters) |> prettify_dataframe()
 
 
 #### Durchschleifen mehrerer Kacheln, Ausgabe in MySQL-Datenbank:
@@ -83,7 +233,7 @@ summary_table <- extract_rasters(rasters) |> enrich_extract()
 
 dbDisconnect(conn) ## ggf. bestehende Verbindung schließen
 ## Verbindung öffnen
-conn <- dbConnect( drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
+conn <- dbConnect(drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
 
 ## Ausgabe-table "raw" anlegen:
 prepare_db_output_table(conn, 'raw')
@@ -96,24 +246,34 @@ sink(file = "./output/process.log", append = TRUE,
      split = FALSE
      )
 
+source('./helpers.R')
 
 #### tile codes durchschleifen:
-  1 : length(tile_codes) |> ## ggf. ab schon prozedierter Kachel fortsetzen:
+  c(1) |> ## ggf. ab schon prozedierter Kachel fortsetzen:
   Map(f = \(i){
     if(!tile_codes[i] %in% c('26425-46800')){
-    calc_and_save(dir_root, tile_code = tile_codes[i],
+    calc_and_save(file_paths, 
+                  tile_code = tile_codes[i],
                   conn = conn,
                   i = i,
                   save_excels = FALSE,
                   export_images = FALSE
                   )
     }
-  }) ##|> microbenchmark::microbenchmark()
+  })
 
 
+  
+  
 dbDisconnect(conn)
 ## Ausgabe in Logdatei schließen:
 sink()
+
+
+d <- rasters |> extract_rasters() |> 
+   prettify_dataframe() |> 
+  head()
+
 
 
 
@@ -219,13 +379,7 @@ conn <- dbConnect( drv = SQLite(), dbname = './output/solarpotenzial.sqlite')
 
 d <- dbGetQuery(conn, "SELECT * FROM raw LIMIT 1000")
 
-head(d)
-d |> rio::export("hugo.xlsx")
-  
-  
-getwd()
 
-?c_across
 
 d <- dbGetQuery(conn, "SELECT * FROM raw")
 

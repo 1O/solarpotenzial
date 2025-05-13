@@ -190,7 +190,9 @@ get_areas_wide <- \(r, zones_1, ...){
 
 ## Extrahiert Werte aus den div. berechneten Rastern und 
 ## gibt sie als dataframe zurück:
-extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
+extract_rasters <- \(rasters, iqr_mult = 2, ...){
+  multizonal <- list(...)$multizonal
+  multizonal <- ifelse(length(multizonal), multizonal, FALSE)
   ## Spalten mit OBJECTID und DOM-Ausreißer:
   outliers <- zonal(rasters$dom, rasters$buildings,
                     fun = \(xs){lb = quantile(xs, .25, na.rm = TRUE)
@@ -214,8 +216,8 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
   ) |> as.matrix() |> as.data.frame()
   ## Ausrichtung
   a_per_aspect <- get_areas_wide(rasters$a, rasters$buildings, rasters$aspect) |> 
-      rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
- 
+    rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
+  
   ## Fläche per Dach:
   a_total <- zonal(rasters$a, rasters$buildings, fun = "sum", na.rm = TRUE) |>
     rename(a_total = 'area')
@@ -240,7 +242,7 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
   ## Einstrahlung nach Eignungsklasse:
   glo_per_suit <- get_areas_wide(rasters$glo_corr, rasters$buildings, rasters$suit) |>
     rename_with(~ sprintf('a_%s', .x), .cols = -OBJECTID)
-
+  
   ## Ertrag PV
   harvest_pv <- zonal(rasters$harvest_pv, rasters$buildings, fun = "sum", na.rm = TRUE)
   
@@ -271,8 +273,10 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
                   values_fill = 0,
                   names_vary = 'fastest'
       ) |> 
-      rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID))
+      rename_with(~ sprintf("glo_%s", .x), .cols = -c(OBJECTID)) 
   }
+  
+  
 
   ## welche Objekte sind dataframes und enthalten mindestens eine der in
   ## table_definition festgelegten Spaltennamen?
@@ -280,27 +284,30 @@ extract_rasters <- \(rasters, iqr_mult = 2, multizonal = FALSE){
     ls() |>
     Filter(f = \(o) is.data.frame(get(o))) |> 
     Filter(f = \(d) length(intersect(names(get(d)), names(table_definition))))
-
+  
   ## gewünschte dataframes joinen:
   tail(names_dataframes, -1) |> 
-    Reduce(f = \(L, R) left_join(L, get(R)), init = get(names_dataframes[1]))
+    Reduce(f = \(L, R) left_join(L, get(R)), init = get(names_dataframes[1])) |> 
+    ## '.' durch '_' in Spaltennamen ersetzen:
+    rename_with(~ gsub('\\.', '_', .x))
 }
 
 
 ## kosmetische Arbeiten an der Ergebnistabelle:
 ## Spalten in richtige Reihenfolge etc.
 prettify_dataframe <- \(d){
-
+  
   ## Spaltenvorlage für Ergebnis-Dataframe ...
   rep(NA, length(table_definition)) |> 
     setNames(nm = names(table_definition)) |>
     as.list() |> list2DF() |> 
-  ## ... Ergebniszeilen anbinden:
+    ## ... Ergebniszeilen anbinden:
     bind_rows(d) |> 
     tail(-1) |>
-  ## fehlende Werte durch 0 ersetzen:  
+    ## fehlende Werte durch 0 ersetzen:  
     mutate(across(where(is.numeric), ~ replace_na(.x, 0)))
 }
+
 
 
 ## SQLITE Tabelle erzeugen,
@@ -308,10 +315,10 @@ prettify_dataframe <- \(d){
 prepare_db_output_table <- \(conn, table_name = 'raw'){
   statement <- sprintf("CREATE TABLE IF NOT EXISTS %s (%s,
             PRIMARY KEY(GEMEINDE_ID, OBJECTID))",
-            table_name,
-            paste(names(table_definition), table_definition) |> 
-              paste(collapse = ', ')
-    )
+                       table_name,
+                       paste(names(table_definition), table_definition) |> 
+                         paste(collapse = ', ')
+  )
   
   dbExecute(conn, statement)
 }
@@ -327,11 +334,12 @@ write_to_db <- \(d, table_name = 'raw', conn){ ## data.frame
   )
 }
 
+
 ### Berechnung und Speicherung pro Kachel:
 calc_and_save <- \(file_paths, tile_code, export_images = FALSE, 
                    save_excels = FALSE, conn, i
 ){
- 
+  
   cat(paste('\n', i, Sys.time(), ': '))
   cat(sprintf('working on tile %s ...', tile_code))
   cat('preparing rasters...')
@@ -340,9 +348,11 @@ calc_and_save <- \(file_paths, tile_code, export_images = FALSE,
   tryCatch(
     d <- rasters |> 
       extract_rasters() |> ## Rasterwerte als data.frame extrahieren
-      enrich_extract() ## zusätzliche Tabellenkalkulationen
+      prettify_dataframe() ## zusätzliche Tabellenkalkulationen
     , error = \(e) cat(paste('...can\'t extract data: ', e))
   )
+  
+  
   
   
   cat("...trying to write to database ...")
