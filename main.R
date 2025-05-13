@@ -8,7 +8,7 @@ library(data.table)
 library(RSQLite)
 library(imager)
 library(rio)
-library(testthat)
+# library(testthat)
 
 
 ### Arbeitsumgebung setzenDOM
